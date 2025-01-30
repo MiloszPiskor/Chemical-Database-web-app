@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block title %}Chemical Database{% endblock %}
+
+{% block content %}
+    <main class="container mt-4">
+        <h2>Welcome to the Chemical Database!</h2>
+        <p>This is a web application where you can log chemical entries, track their properties, and visualize trends.</p>
+    </main>
+    <div class="container my-5">
+  <div class="p-5 text-center bg-body-tertiary rounded-3">
+    <img src="{{ url_for('static', filename='assets/img/entry_logo.jpg') }}" alt="Picture of a book with chemcal elements" width="100" height="100" class="logo" >
+    <h1 class="text-body-emphasis">Add an entry to the product registry</h1>
+    <p class="col-lg-8 mx-auto fs-5 text-muted">
+      Enter the inventory receipt or issue.
+    </p>
+    <div class="d-inline-flex gap-2 mb-2">
+      <a class="d-inline-flex align-items-center btn btn-primary btn-lg px-4 rounded-pill" role="button" href=" {{ url_for('add_entry') }}">
+        Open the Income and Expenditure Book
+        <svg class="bi ms-2" width="24" height="24"><use xlink:href="#arrow-right-short"></use></svg>
+      </a>
+      <button class="btn btn-outline-secondary btn-lg px-4 rounded-pill" type="button">
+        Modify a particular record in the Book
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
