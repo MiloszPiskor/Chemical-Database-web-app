@@ -1,0 +1,282 @@
+/* General Styling */
+body {
+  font-family: 'Roboto', sans-serif;
+  background-color: #f0f4f8; /* Subtle light blue-gray */
+  color: #333; /* Neutral dark gray for text */
+  margin: 0;
+  padding: 0;
+  line-height: 1.6;
+}
+
+/* Alerts */
+.alert {
+  padding: 1rem;
+  border-radius: 10px;
+  margin-bottom: 1rem;
+  font-weight: bold;
+}
+
+.alert-success {
+  background-color: #d1f7c4; /* Soft green */
+  color: #1e7d32; /* Dark green */
+  border: 1px solid #1e7d32;
+}
+
+.alert-danger {
+  background-color: #f8d7da; /* Soft red */
+  color: #a71d2a; /* Dark red */
+  border: 1px solid #a71d2a;
+}
+
+.alert-warning {
+  background-color: #fff3cd; /* Soft yellow */
+  color: #856404; /* Golden brown */
+  border: 1px solid #856404;
+}
+
+/* Header */
+header {
+  background-color: #023e8a; /* Deep vibrant blue */
+  color: #fff;
+  border-bottom: 3px solid #00b4d8; /* Accent aqua */
+}
+
+header .nav-link {
+  color: #caf0f8; /* Soft aqua for nav links */
+  transition: color 0.3s ease;
+}
+
+header .nav-link:hover {
+  color: #90e0ef; /* Brighter aqua on hover */
+}
+
+header .logo {
+  border-radius: 50%; /* Circular logo */
+  object-fit: cover;
+  width: 50px; /* Adjusted for better visibility */
+  height: 50px;
+  border: 3px solid #00b4d8; /* Matches the header accent */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+/* Search Bar */
+form .form-control {
+  border: 2px solid #00b4d8;
+  border-radius: 20px;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+form .form-control:focus {
+  border-color: #90e0ef;
+  box-shadow: 0 0 8px rgba(144, 224, 239, 0.5);
+}
+
+/* Buttons */
+.btn-light {
+  background-color: #fff;
+  border: 2px solid #00b4d8;
+  color: #023e8a;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.btn-light:hover {
+  background-color: #caf0f8;
+  color: #023e8a;
+}
+
+.btn-primary {
+  background-color: #00b4d8;
+  border: none;
+  color: #fff;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.btn-primary:hover {
+  background-color: #0077b6;
+  transform: scale(1.05);
+}
+
+/* Footer */
+footer {
+  background-color: #023e8a;
+  color: #fff;
+}
+
+footer .text-body-secondary {
+  color: #caf0f8;
+}
+
+footer a.text-body-secondary:hover {
+  color: #90e0ef;
+  text-decoration: underline;
+}
+
+/* Card/Container Styling for Product & Entry Details */
+.card {
+  background-color: #fff;
+  border: 2px solid #ddd;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+}
+
+.card h5 {
+  font-size: 1.25rem;
+  color: #023e8a; /* Deep blue for headings */
+}
+
+.card p {
+  color: #333; /* Neutral text color */
+}
+
+/* Forms */
+form .form-group {
+  margin-bottom: 1rem;
+}
+
+form label {
+  font-weight: bold;
+  color: #333;
+}
+
+form input,
+form select,
+form textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #00b4d8;
+  border-radius: 10px;
+  outline: none;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+form input:focus,
+form select:focus,
+form textarea:focus {
+  border-color: #90e0ef;
+  box-shadow: 0 0 8px rgba(144, 224, 239, 0.5);
+}
+
+form button {
+  background-color: #00b4d8;
+  color: #fff;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 10px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+form button:hover {
+  background-color: #0077b6;
+  transform: scale(1.05);
+}
+
+/* Table Styling */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: #fff; /* White for clear readability */
+  border: 1px solid #ddd;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+table th, table td {
+  padding: 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+  font-size: 0.9rem;
+}
+
+table th {
+  background-color: #00b4d8; /* Aqua for header rows */
+  color: #fff;
+  text-transform: uppercase;
+  font-weight: bold;
+}
+
+table tr:hover {
+  background-color: #caf0f8; /* Soft aqua for hover rows */
+}
+
+.filter-container {
+  margin-bottom: 1rem;
+  display: flex;
+  gap: 1rem;
+}
+
+.filter-container input,
+.filter-container select {
+  padding: 0.5rem;
+  border: 2px solid #00b4d8;
+  border-radius: 20px;
+  outline: none;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.filter-container input:focus,
+.filter-container select:focus {
+  border-color: #90e0ef;
+  box-shadow: 0 0 8px rgba(144, 224, 239, 0.5);
+}
+
+/* Miscellaneous */
+.text-center {
+  text-align: center;
+}
+
+.mb-3 {
+  margin-bottom: 1rem;
+}
+
+/* Additional Utilities */
+.border-top {
+  border-top: 2px solid #00b4d8;
+}
+
+.text-bg-dark {
+  background-color: #023e8a !important;
+  color: #fff !important;
+}
+
+/* Hover Animations */
+.nav-link:hover svg,
+footer a:hover svg {
+  fill: #90e0ef;
+  transition: fill 0.3s ease;
+}
+
+/* Container for circular logo */
+.logo {
+  width: 100px; /* Adjust size as needed */
+  height: 100px; /* Adjust size as needed */
+  border-radius: 50%; /* Makes the image circular */
+  object-fit: cover; /* Ensures the image fits within the circle */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.06); /* Soft shadow for depth */
+  border: 4px solid rgba(255, 255, 255, 0.8); /* Subtle white border for contrast */
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.5)); /* Subtle fade effect */
+}
+
+/* Hover effect for a delicate fade */
+.logo:hover {
+  box-shadow: 0 8px 12px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.1); /* Stronger shadow on hover */
+  transform: scale(1.05); /* Slight zoom-in effect */
+  transition: all 0.3s ease; /* Smooth transition */
+
+.nav-link {
+  color: #caf0f8 !important;  /* Make sure the color is applied */
+  display: inline-block;  /* Ensure the element is inline */
+  padding: 10px;  /* Add some padding for easier clickability */
+}
+.nav-link:hover {
+  color: #90e0ef !important;  /* Change color on hover */
+}

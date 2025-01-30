@@ -1,0 +1,26 @@
+{% from 'bootstrap5/form.html' import render_form %}
+{% extends 'base.html' %}
+
+{% block content %}
+<main class="mb-4">
+  <div class="container">
+    <div class="row">
+    {% with messages = get_flashed_messages(with_categories=True) %}
+        {% if messages %}
+          <ul>
+             {% for category, message in messages %}
+               <li class="flash {{ category }}">{{ message }}</li>
+             {% endfor %}
+          </ul>
+        {% endif %}
+    {% endwith %}
+      <div class="col-lg-8 col-md-10 mx-auto">
+            <form action="{{ url_for('login', next=request.args.get('next')) }}" method="POST">
+              {{ form.hidden_tag() }}
+              {{ render_form(form) }}
+            </form>
+      </div>
+    </div>
+  </div>
+</main>
+{% endblock %}
