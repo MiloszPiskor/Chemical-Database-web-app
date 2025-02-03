@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container">
+    <div class="row my-3">
+            {% with messages = get_flashed_messages(with_categories=True) %}
+        {% if messages %}
+          <ul>
+             {% for category, message in messages %}
+               <li class="flash {{ category }}">{{ message }}</li>
+             {% endfor %}
+          </ul>
+        {% endif %}
+    {% endwith %}
+    </div>
+</div>
+<div class="row">
+{% for product in current_user.products %}
+<div class="col-sm-6 mb-3 mb-sm-0">
+<div class="card" style="width: 23rem;">
+  <img src="{{ product.img_url }}" class="card-img-top" alt="Product: {{ product.name }} image">
+  <div class="card-body">
+    <h5 class="card-title">{{ product.name }}</h5>
+    <p class="card-text">Product's stock: {{ product.stock }}</p>
+      <p class="card-text">Product's customs code: {{ product.customs_code }}</p>
+        <a type="button" class="btn btn-primary btn-lg" href="{{ url_for('products.edit_product', product_id=product.id) }}">Edit {{ product.name }}</a>
+    <button type="button" class="btn btn-secondary btn-lg">Delete {{ product.name }}</button>
+  </div>
+</div>
+</div>
+{% endfor %}
+</div>
+<div class="d-grid gap-2 col-6 mx-auto mt-4">
+  <a type="button" class="btn btn-primary btn-lg" href="{{ url_for('products.add_product') }}">Add Product</a>
+</div>
+{% endblock %}

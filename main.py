@@ -1,16 +1,18 @@
 from functools import wraps
-
+import logging
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import UserMixin, login_user, LoginManager, current_user, logout_user, login_required, login_manager
 from flask_ckeditor import CKEditor
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect
 from sqlalchemy.orm import DeclarativeBase
-from werkzeug.security import generate_password_hash, check_password_hash
 from flask_bootstrap import Bootstrap5
 from datetime import date
 from models import User, Product, Company, LineItem, ProductCompany, db
 from forms import RegisterForm, LoginForm, EntryForm, CompanyForm, ProductForm
+from companies import companies_bp
+from products import products_bp
+from users import users_bp
 from dotenv import load_dotenv
 import os
 
@@ -23,6 +25,15 @@ def user_check(email):
         flash("You are already registered in our database. Please log in.")
         email = email
         return redirect(url_for("login", email=email))
+
+def product_check(name):
+    """A function that checks if a product entered in the Product Form
+    already exists in a database, if it does it redirects the User to the
+    specific Product page"""
+    check_for_product = Product.query.filter_by(name=name).first()
+    if check_for_product:
+        flash("This product already exists in the database.")
+        return redirect(url_for("products"))
 
 def _url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):
     if url is not None:
@@ -55,6 +66,16 @@ load_dotenv()
 
 # Initialising the app
 app = Flask(__name__)
+# Registering the blueprints
+app.register_blueprint(companies_bp)
+app.register_blueprint(products_bp)
+app.register_blueprint(users_bp)
+# Logging setup
+if not app.debug:
+    handler = logging.FileHandler("app.log")
+    handler.setLevel(logging.INFO)
+    app.logger.addHandler(handler)
+
 ckeditor = CKEditor(app)
 bootstrap = Bootstrap5(app)
 
@@ -92,79 +113,81 @@ with app.app_context():
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get_or_404(user_id)
+    return User.query.filter_by(id=user_id).first()
 
-@app.route("/register", methods=["POST", "GET"])
-def register():
-
-    form = RegisterForm()
-    if form.validate_on_submit():
-        app.logger.info("Register Form successfully submitted.")
-        # Check if User in database:
-        user_check(email=form.email.data)
-        # Creating a new User object:
-        new_user = User(name=form.name.data, email=form.email.data)
-        # Hashed password management for user:
-        new_user.set_password(password=form.password.data)
-
-        try:
-            db.session.add(new_user)
-            db.session.commit()
-            app.logger.info(f"User: {new_user.name} successfully added to the database.")
-        except Exception as e:
-            db.session.rollback()
-            app.logger.error(f"User: {new_user.name} not added to the database due to the error: {e}.")
-            flash("An error occurred during the registration, please try again!")
-
-        login_user(new_user)
-        flash("You've been successfully registered!", category="success")
-        return redirect(url_for("home"))
-
-
-    return render_template("register.html", form = form)
-
-@app.route("/login", methods=["POST", "GET"])
-def login():
-
-    form = LoginForm()
-    # Email field autofill for the redirected User from registration if they are already registered
-    if request.args.get("email"):
-        form = LoginForm(
-            email = request.args.get("email")
-        )
-
-    if form.validate_on_submit():
-        # Check if User exists in DB, if not redirect them to registration
-        existing_user = db.session.execute(db.select(User).where(User.email == form.email.data)).scalar_one_or_none()
-        if not existing_user:
-            flash("You need to be registered to log in.")
-            return redirect(url_for('register'))
-        # Checking for a password match
-        if not existing_user.check_password(password=form.password.data):
-            flash("Incorrect password.")
-            return redirect(url_for('login'))
-        #Logging User in
-        login_user(existing_user)
-        flash("Successfully logged in!", category="success")
-        # Default to 'homepage' path
-        next_url = url_for("homepage")
-        # Override next_url if it's valid
-        captured_url = request.args.get('next')
-        if captured_url and _url_has_allowed_host_and_scheme(next_url, request.host):
-            next_url = current_user
-            app.logger.info(f"The captured url for unauthorized entry has been fetched. Redirecting to: {next_url}...")
-
-        return redirect(next_url)
-
-    return render_template("login.html", form= form)
-
-@app.route('/logout')
-def logout():
-
-    logout_user()
-    app.logger.info("User successfully logged out.")
-    flash("You've been successfully logged out.", category="success")
-    return redirect(url_for('login'))
+# @app.route("/register", methods=["POST", "GET"])
+# def register():
+#
+#     form = RegisterForm()
+#     if form.validate_on_submit():
+#         app.logger.info("Register Form successfully submitted.")
+#         # Check if User in database:
+#         user_check(email=form.email.data)
+#         # Creating a new User object:
+#         new_user = User(name=form.name.data, email=form.email.data)
+#         # Hashed password management for user:
+#         new_user.set_password(password=form.password.data)
+#
+#         try:
+#             db.session.add(new_user)
+#             db.session.commit()
+#             app.logger.info(f"User: {new_user.name} successfully added to the database.")
+#         except Exception as e:
+#             db.session.rollback()
+#             app.logger.error(f"User: {new_user.name} not added to the database due to the error: {e}.")
+#             flash("An error occurred during the registration, please try again!")
+#
+#         login_user(new_user)
+#         flash("You've been successfully registered!", category="success")
+#         return redirect(url_for("home"))
+#
+#
+#     return render_template("register.html", form = form)
+#
+# @app.route("/login", methods=["POST", "GET"])
+# def login():
+#
+#     form = LoginForm()
+#     # Email field autofill for the redirected User from registration if they are already registered
+#     if request.args.get("email"):
+#         form = LoginForm(
+#             email = request.args.get("email")
+#         )
+#
+#     if form.validate_on_submit():
+#         # Check if User exists in DB, if not redirect them to registration
+#         existing_user = db.session.execute(db.select(User).where(User.email == form.email.data)).scalar_one_or_none()
+#         if not existing_user:
+#             flash("You need to be registered to log in.")
+#             return redirect(url_for('register'))
+#         # Checking for a password match
+#         if not existing_user.check_password(password=form.password.data):
+#             flash("Incorrect password.")
+#             return redirect(url_for('login'))
+#         #Logging User in
+#         login_user(existing_user)
+#         flash("Successfully logged in!", category="success")
+#         # Default to 'homepage' path
+#         next_url = url_for("home")
+#         # Override next_url if it's valid
+#         captured_url = request.args.get('next')
+#         app.logger.info(f"Current captured url is:{captured_url}")
+#         if captured_url and _url_has_allowed_host_and_scheme(next_url, request.host):
+#             next_url = captured_url
+#             app.logger.info(f"The captured url for unauthorized entry has been fetched. Redirecting to: {next_url}...")
+#
+#         return redirect(next_url)
+#
+#     return render_template("login.html", form= form)
+#
+# @app.route('/logout')
+# @login_required
+# def logout():
+#
+#     logout_user()
+#     app.logger.info("User successfully logged out.")
+#     flash("You've been successfully logged out.", category="success")
+#     return redirect(url_for('login'))
 
 @app.route("/")
 def home():
@@ -172,6 +195,7 @@ def home():
     return render_template("index.html")
 
 @app.route("/new-entry", methods=["GET", "POST"])
+@login_required
 def add_entry():
 
     form = EntryForm()
@@ -187,19 +211,109 @@ def add_entry():
 
     return render_template('add_entry.html', form=form)
 
-@app.route("/new-company", methods=["GET", "POST"])
-def add_company():
+# @app.route("/products")
+# @login_required
+# def products():
+#     return render_template('products.html')
+#
+# @app.route("/edit-product")
+# @login_required
+# def edit_product():
+#
+#     id = int(request.args.get('product_id'))
+#     product = Product.query.filter_by(id = id).first()
+#     form = ProductForm(
+#         name = product.name,
+#         customs_code = product.customs_code,
+#         img_url = product.img_url
+#     )
+#     if form.validate_on_submit():
+#         try:
+#             for key, value in form.data.items():
+#                 setattr(product, key, value)
+#             db.session.commit()
+#             flash(f"Successfully implemented changes to the: {product.name}")
+#             app.logger.info(f"Changes implemented for product: {product.id}.")
+#             return redirect(url_for('products'))
+#         except Exception as e:
+#             db.session.rollback()
+#             app.logger.error(f"Error {e} occurred while editing Product", exc_info=True)
+#             flash(f"An error occurred while implementing changes for: {product.name}. Please try again", "danger")
+#             return redirect(url_for('products'))
+#
+#
+#
+#
+#     return render_template('product.html', form = form)
+#
+# @app.route("/delete-product")
+# @login_required
+# def delete_product():
+#
+#     id = request.args.get('product_id')
+#     product = Product.query.filter_by(id=id).first()
+#
+#
+# @app.route("/companies")
+# @login_required
+# def companies():
+#     return render_template('companies.html')
+#
+# @app.route("/new-company", methods=["GET", "POST"])
+# @login_required
+# def add_company():
+#
+#     form = CompanyForm()
+#
+#     return render_template('add_company.html', form=form)
+#
+# @app.route("/new-product", methods=["GET", "POST"])
+# @login_required
+# def add_product():
+#
+#     form = ProductForm()
+#     if form.validate_on_submit():
+#         product_check(name=form.name.data)
+#         new_product = Product(
+#             name = form.name.data,
+#             customs_code = form.customs_code.data,
+#             img_url = form.img_url.data,
+#             stock= 0,
+#             user = current_user
+#         )
+#         try:
+#             db.session.add(new_product)
+#             db.session.commit()
+#             app.logger.info(f"New user {new_product.name} added to the database.")
+#             flash(f"Success! Added a new product: {new_product.name} to the database.")
+#             return redirect(url_for('products'))
+#         except Exception as e:
+#             db.session.rollback()
+#             app.logger.error(f"Error {e} occurred while adding new Product.", exc_info=True)
+#             flash(f"An error occurred while adding: {new_product.name} to the database. Please try again", "danger")
+#             return redirect(url_for('add_product'))
+#
+#
+#
+#
+#     return render_template('add_product.html', form=form)
 
-    form = CompanyForm()
+# Two routes handling the AJAX Forms update
+@app.route("/add_product_ajax", methods=["POST"])
+def add_product_ajax():
+    data = request.get_json()
+    new_product = Product(name=data["name"])
+    db.session.add(new_product)
+    db.session.commit()
+    return jsonify(success=True, product_id=new_product.id)
 
-    return render_template('add_company.html', form=form)
-
-@app.route("/new-product", methods=["GET", "POST"])
-def add_product():
-
-    pass
-
-
+@app.route("/add_company_ajax", methods=["POST"])
+def add_company_ajax():
+    data = request.get_json()
+    new_company = Company(name=data["name"])
+    db.session.add(new_company)
+    db.session.commit()
+    return jsonify(success=True, company_id=new_company.id)
 
 if __name__ == "__main__":
     app.run(debug=True, port=5002)

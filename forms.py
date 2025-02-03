@@ -23,7 +23,7 @@ class EntryForm(FlaskForm):
 
 # Register Form:
 class RegisterForm(FlaskForm):
-    name = StringField("Name for Your Account", validators=[DataRequired()])
+    name = StringField("Name of Your Account", validators=[DataRequired()])
     email = StringField("Email", validators=[DataRequired(), Email()])
     password = PasswordField("Password", validators=[DataRequired(), Length(min = 8, message=" Password must be at least 8 characters long.")])
     submit = SubmitField(label="Register")
@@ -36,8 +36,15 @@ class LoginForm(FlaskForm):
 
 # Company Form:
 class CompanyForm(FlaskForm):
+    name = StringField("Company name", validators=[DataRequired()])
+    address = StringField("Company address", validators=[DataRequired()])
+    contact_person = StringField("Contact person name", validators=[DataRequired()])
+    contact_number = StringField("Company contact number", validators=[DataRequired()])
     submit = SubmitField(label="Register Company")
 
 class ProductForm(FlaskForm):
+    name = StringField("Product name", validators=[DataRequired()])
+    customs_code = StringField("Customs code of the Product", validators=[DataRequired()])
+    img_url = StringField("Product image URL", validators=[URL(), DataRequired()])
     submit = SubmitField(label="Register Product")
 

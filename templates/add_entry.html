@@ -33,7 +33,7 @@
             {{ form.product_name.label }}
             {{ form.product_name(class="form-control") }}
             <small>
-              <a href="{{ url_for('add_product', next=request.url) }}" class="btn btn-sm btn-link">
+              <a href="#" class="btn btn-sm btn-link" data-bs-toggle="modal" data-bs-target="#productModal">
                 + Add New Product
               </a>
             </small>
@@ -44,7 +44,7 @@
             {{ form.company_name.label }}
             {{ form.company_name(class="form-control") }}
             <small>
-              <a href="{{ url_for('add_company', next=request.url) }}" class="btn btn-sm btn-link">
+              <a href="#" class="btn btn-sm btn-link" data-bs-toggle="modal" data-bs-target="#companyModal">
                 + Add New Company
               </a>
             </small>
@@ -67,4 +67,45 @@
     </div>
   </div>
 </main>
+<!-- Add Product Modal -->
+<div class="modal fade" id="addProductModal" tabindex="-1" aria-labelledby="addProductModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="addProductModalLabel">Add New Product</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="productForm">
+          <div class="mb-3">
+            <label for="productName" class="form-label">Product Name</label>
+            <input type="text" class="form-control" id="productName" required>
+          </div>
+          <button type="submit" class="btn btn-primary">Add Product</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Company Modal -->
+<div class="modal fade" id="addCompanyModal" tabindex="-1" aria-labelledby="addCompanyModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="addCompanyModalLabel">Add New Company</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="companyForm">
+          <div class="mb-3">
+            <label for="companyName" class="form-label">Company Name</label>
+            <input type="text" class="form-control" id="companyName" required>
+          </div>
+          <button type="submit" class="btn btn-primary">Add Company</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

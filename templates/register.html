@@ -3,7 +3,7 @@
 
 {% block content %}
 <main class="mb-4">
-  <div class="container">
+  <div class="container my-3 ">
       <div class="row">
         {% with messages = get_flashed_messages(with_categories=True) %}
          {% if messages %}
@@ -16,7 +16,7 @@
         {% endwith %}
 
         <div class="col-lg-8 col-md-10 mx-auto">
-            <form action="{{ url_for('register') }}" method="POST">
+            <form action="{{ url_for('users.register') }}" method="POST">
                 {{ render_form(form) }}
             </form>
         </div>

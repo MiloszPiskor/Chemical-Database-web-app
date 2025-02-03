@@ -22,7 +22,7 @@ class User(db.Model,UserMixin):
 
     # Hashed password management:
     def set_password(self, password):
-        self.hashed_password= generate_password_hash(password, method='pbkdf2:sha256', salt_length=8)
+        self.password_hash= generate_password_hash(password, method='pbkdf2:sha256', salt_length=8)
 
     def check_password(self, password):
         return check_password_hash(password=password, pwhash=self.password_hash)
@@ -61,6 +61,7 @@ class Product(db.Model):
     name: Mapped[str] = mapped_column(String(250), unique=True, nullable=False)
     stock: Mapped[float] = mapped_column(Float, nullable=False)
     customs_code: Mapped[str] = mapped_column(String(250), nullable=False)
+    img_url: Mapped[str] = mapped_column(String(250), nullable=False)
 
     # Relationship of Many to Many with Company through ProductCompany Model, here the Parent for ProductCompany
     product_companies: Mapped[list["ProductCompany"]] = relationship("ProductCompany", back_populates="product")

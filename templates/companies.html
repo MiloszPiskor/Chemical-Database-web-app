@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% for company in current_user.companies %}
+ <div class="card">
+    <h5>Company Name</h5>
+    <p>This is a description of the company. It includes details, features, and more.</p>
+   <div class="bd-example m-0 border-0">
+
+    <button type="button" class="btn btn-primary btn-lg">Edit {{ company.name }}</button>
+    <button type="button" class="btn btn-secondary btn-lg">Delete {{ company.name }}</button>
+
+  </div>
+  </div>
+{% endfor %}
+<div class="bd-example m-0 border-0">
+  <a type="button" class="btn btn-primary btn-lg" href="{{ url_for('add_company') }}">Add Company</a>
+</div>

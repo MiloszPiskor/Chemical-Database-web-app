@@ -43,13 +43,13 @@
               </a>
             </li>
             <li>
-              <a href="#" class="nav-link text-white">
+              <a href="{{ url_for('products.products') }}" class="nav-link text-white">
                 <svg class="bi d-block mx-auto mb-1" width="24" height="24"><use xlink:href="#grid"></use></svg>
                 Products
               </a>
             </li>
             <li>
-              <a href="#" class="nav-link text-white">
+              <a href="{{ url_for('companies.companies') }}" class="nav-link text-white">
                 <svg class="bi d-block mx-auto mb-1" width="24" height="24"><use xlink:href="#people-circle"></use></svg>
                 Customers
               </a>
@@ -65,13 +65,19 @@
         </form>
 
         <div class="text-end">
-          <button type="button" class="btn btn-light text-dark me-2">Login</button>
-          <button type="button" class="btn btn-primary">Sign-up</button>
+          {% if not current_user.is_authenticated %}
+          <a type="button" class="btn btn-light text-dark me-2" href="{{ url_for('users.login') }}">Login</a>
+          <a type="button" class="btn btn-primary" href="{{ url_for('users.register') }}">Sign-up</a>
+          {% else %}
+          <a type="button" class="btn btn-primary" href="{{ url_for('users.logout') }}">Log-out</a>
+          {% endif %}
         </div>
       </div>
     </div>
   </header>
-{% block content %}{% endblock %}
+{% block content %}
+{% endblock %}
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 <div class="container">
   <footer class="d-flex flex-wrap justify-content-between align-items-center py-3 my-4 border-top">
