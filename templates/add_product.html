@@ -16,7 +16,8 @@
     {% endwith %}
       <div class="col-lg-8 col-md-10 mx-auto">
           {% if edit %}
-          <form action="{{ url_for('products.edit_product') }}" method="POST">
+          <form action="{{ url_for('products.edit_product', product_id=product.id) }}" method="POST">
+          <input type="hidden" name="_method" value="PATCH">
           {% else %}
           <form action="{{ url_for('products.add_product') }}" method="POST">
           {% endif %}
@@ -41,6 +42,7 @@
             {{ form.submit(class="btn btn-primary") }}
           {% endif %}
           </div>
+          </form>
           </form>
       </div>
     </div>

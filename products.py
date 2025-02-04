@@ -23,7 +23,7 @@ def product_check(name):
 def products():
     return render_template('products.html')
 
-@products_bp.route("/edit-product/<int:product_id>", methods=["GET", "POST"])
+@products_bp.route("/products/<product_id>", methods=["GET","POST", "PATCH"])
 @login_required
 def edit_product(product_id):
 
@@ -33,26 +33,29 @@ def edit_product(product_id):
     print(product_id)
     current_app.logger.info(f"The product found by id: {product_id}")
     product = db.get_or_404(Product, product_id)
-    form = ProductForm(
+    print(f"Edited Product's id: {product.id}")
+    edit_form = ProductForm(
         name = product.name,
         customs_code = product.customs_code,
         img_url = product.img_url
     )
-    if form.validate_on_submit():
+    if edit_form.validate_on_submit():
+        if request.method == "POST" and request.form.get("_method") == "PATCH":
+            request.method = "PATCH"  # Override method
         try:
-            for key, value in form.data.items():
+            for key, value in edit_form.data.items():
                 setattr(product, key, value)
             db.session.commit()
             flash(f"Successfully implemented changes to the: {product.name}")
             current_app.logger.info(f"Changes implemented for product: {product.id}.")
-            return redirect(url_for('products'))
+            return redirect(url_for('products.products'))
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Error {e} occurred while editing Product", exc_info=True)
             flash(f"An error occurred while implementing changes for: {product.name}. Please try again", "danger")
-            return redirect(url_for('products_bp.products'))
+            return redirect(url_for('products.products'))
 
-    return render_template('add_product.html', form=form, edit=True)
+    return render_template('add_product.html', form=edit_form, edit=True, product=product)
 
 @products_bp.route("/delete-product")
 @login_required
