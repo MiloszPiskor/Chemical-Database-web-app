@@ -73,6 +73,17 @@ class Product(db.Model):
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"))
     user: Mapped["User"] = relationship("User", back_populates="products")
 
+    def editable_fields(self):
+        """Returns a dictionary of fields that are editable by the user."""
+        return {
+            "name": self.name,
+            "customs_code": self.customs_code,
+            "img_url": self.img_url
+        }
+
+    def to_dict(self):
+        """Returns all fields, including the non-editable ones."""
+        return {column.name: getattr(self, column.name) for column in self.__table__.columns}
 
 class Company(db.Model):
     __tablename__ = "companies"

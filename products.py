@@ -3,8 +3,10 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from flask_login import UserMixin, login_user, LoginManager, current_user, logout_user, login_required, login_manager
 from flask_ckeditor import CKEditor
 from datetime import date
+from werkzeug.exceptions import NotFound, BadRequest, InternalServerError
 from models import User, Product, Company, LineItem, ProductCompany, db
 from forms import ProductForm
+import random
 import os
 
 products_bp = Blueprint("products", __name__)
@@ -14,80 +16,115 @@ def product_check(name):
     already exists in a database, if it does it redirects the User to the
     specific Product page"""
     check_for_product = Product.query.filter_by(name=name).first()
-    if check_for_product:
-        flash("This product already exists in the database.")
-        return redirect(url_for("products.products"))
+    return check_for_product
+
+@products_bp.route("/products/<product_id>")
+def get_product(product_id):
+
+    try:
+        product = db.get_or_404(Product, product_id)
+        current_app.logger.info(f"Product retrieved: {product.id} by func: {get_product.__name__}")
+        return jsonify(product=product.to_dict()), 200
+
+    except NotFound:
+        current_app.logger.warning(f"Product with ID: {product_id} not found.")
+        return jsonify(error=f"Product of ID: {product_id} not found."), 404
+
+    except Exception as e:
+        current_app.logger.error(f"Unexpected error in {get_product.__name__}: {str(e)}")
+        return jsonify(error="Internal server error"), 500
 
 @products_bp.route("/products")
-@login_required
-def products():
-    return render_template('products.html')
+def get_products():
 
-@products_bp.route("/products/<product_id>", methods=["GET","POST", "PATCH"])
-@login_required
+    try:
+        products = Product.query.all()
+        current_app.logger.info(f"Products retrieved: {[product.id for product in products]} by func: {get_product.__name__}")
+        return jsonify([product.to_dict() for product in products]), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Unexpected error in {get_products.__name__}: {str(e)}")
+        return jsonify(error="Internal server error"), 500
+
+@products_bp.route("/products/<product_id>", methods=["PATCH"])
 def edit_product(product_id):
 
-    products = Product.query.all()
-    for product in products:
-        print(product.name)
-    print(product_id)
-    current_app.logger.info(f"The product found by id: {product_id}")
-    product = db.get_or_404(Product, product_id)
-    print(f"Edited Product's id: {product.id}")
-    edit_form = ProductForm(
-        name = product.name,
-        customs_code = product.customs_code,
-        img_url = product.img_url
-    )
-    if edit_form.validate_on_submit():
-        if request.method == "POST" and request.form.get("_method") == "PATCH":
-            request.method = "PATCH"  # Override method
-        try:
-            for key, value in edit_form.data.items():
-                setattr(product, key, value)
-            db.session.commit()
-            flash(f"Successfully implemented changes to the: {product.name}")
-            current_app.logger.info(f"Changes implemented for product: {product.id}.")
-            return redirect(url_for('products.products'))
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Error {e} occurred while editing Product", exc_info=True)
-            flash(f"An error occurred while implementing changes for: {product.name}. Please try again", "danger")
-            return redirect(url_for('products.products'))
+    try:
+        edited_product = db.get_or_404(Product, product_id)
+        print(edited_product.name, edited_product.id)
+        data = request.get_json()
+        # Check if attribute not in Product attributes:
+        if any(key not in edited_product.editable_fields() for key in data):
+            invalid_fields=[key for key in data if key not in edited_product.editable_fields().keys()]
+            current_app.logger.warning(f"Invalid field for Patching product with ID: {edited_product.id}.")
+            return jsonify(error=f"Invalid field(s): {", ".join(invalid_fields)} for product: {edited_product.name}."), 400
+        # Applying changes:
+        # Check if the name property is going to be changed, and if new one is unique:
+        if data["name"] != edited_product.name and data["name"]:
+            # Check for Existing Product of the entered name
+            if Product.query.filter(Product.name == data["name"], Product.id != edited_product.id).first():
+                return jsonify(error="A product of this name already exists."), 400
 
-    return render_template('add_product.html', form=edit_form, edit=True, product=product)
+        for key, value in data.items():
+            if key != "name" or (key == 'name' and value != edited_product.name):
+                setattr(edited_product, key, value)
+        db.session.commit()
+        return jsonify(edited_product.to_dict()), 200
 
-@products_bp.route("/delete-product")
-@login_required
-def delete_product():
+    except NotFound:
+        current_app.logger.warning(f"Product with ID: {product_id} not found.")
+        return jsonify(error=f"Product of ID: {product_id} not found."), 404
 
-    id = request.args.get('product_id')
-    product = Product.query.filter_by(id=id).first()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Unexpected error in {edit_product.__name__}: {str(e)}")
+        return jsonify(error="Internal server error"), 500
 
-@products_bp.route("/new-product", methods=["GET", "POST"])
-@login_required
+@products_bp.route("/products/<product_id>", methods=["DELETE"])
+def delete_product(product_id):
+
+    try:
+        deleted_product = db.get_or_404(Product, product_id)
+        db.session.delete(deleted_product)
+        db.session.commit()
+        current_app.logger.info(f"Product: {deleted_product.name} successfully deleted from the database.")
+        return jsonify(success=f"Successfully deleted the product: {deleted_product.name}.")
+
+    except NotFound:
+        current_app.logger.warning(f"Product with ID: {product_id} not found.")
+        return jsonify(error=f"Product of ID: {product_id} not found."), 404
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Unexpected error in {delete_product.__name__}: {str(e)}")
+        return jsonify(error="Internal server error"), 500
+
+@products_bp.route("/products", methods=["POST"])
 def add_product():
 
-    form = ProductForm()
-    if form.validate_on_submit():
-        product_check(name=form.name.data)
-        new_product = Product(
-            name = form.name.data,
-            customs_code = form.customs_code.data,
-            img_url = form.img_url.data,
-            stock= 0,
-            user = current_user
-        )
-        try:
-            db.session.add(new_product)
-            db.session.commit()
-            current_app.logger.info(f"New user {new_product.name} added to the database.")
-            flash(f"Success! Added a new product: {new_product.name} to the database.")
-            return redirect(url_for('products.products'))
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Error {e} occurred while adding new Product.", exc_info=True)
-            flash(f"An error occurred while adding: {new_product.name} to the database. Please try again", "danger")
-            return redirect(url_for('products.add_product'))
+    data = request.get_json()
+    # Check if the keys from the body match the required ones:
+    if any(key not in random.choice(Product.query.all()).editable_fields().keys() for key in data.keys()):
+        current_app.logger.error("Unable to post a new product: invalid fields.")
+        invalid_fields = [key for key in data if key not in random.choice(Product.query.all()).editable_fields().keys()]
+        return jsonify(error=f"Invalid field(s): {", ".join(invalid_fields)}."), 400
 
-    return render_template('add_product.html', form=form, edit=False)
+    # Check if a product of a selected name already exists:
+    if product_check(data["name"]):
+        current_app.logger.error("Unable to post a new product: name already taken.")
+        return jsonify(error=f"A product of such a name already exists"), 400
+
+    try:
+        new_product = Product()
+        for key, value in data.items():
+            setattr(new_product, key, value)
+        # Set stock to 0
+        setattr(new_product,"stock", 0)
+        db.session.add(new_product)
+        db.session.commit()
+        current_app.logger.info(f"Successfully added a new product: {new_product.name} to the database.")
+        return jsonify(success=f"Successfully created a new product: {new_product.name} (ID: {new_product.id})!"), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Unexpected error in {add_product.__name__}: {str(e)}")
+        return jsonify(error="Internal server error"), 500
