@@ -13,6 +13,7 @@ from forms import RegisterForm, LoginForm, EntryForm, CompanyForm, ProductForm
 from companies import companies_bp
 from products import products_bp
 from users import users_bp
+from entries import entries_bp
 from dotenv import load_dotenv
 import os
 

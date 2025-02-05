@@ -1,4 +1,5 @@
 from functools import wraps
+from sqlalchemy import text
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Blueprint, current_app
 from flask_login import UserMixin, login_user, LoginManager, current_user, logout_user, login_required, login_manager
 from flask_ckeditor import CKEditor
@@ -17,6 +18,25 @@ def product_check(name):
     specific Product page"""
     check_for_product = Product.query.filter_by(name=name).first()
     return check_for_product
+
+def assign_user_to_product(product_id, user_id):
+    try:
+        product = Product.query.get(product_id)
+        user = User.query.get(user_id)
+
+        if not product:
+            return jsonify(error="Product not found"), 404
+        if not user:
+            return jsonify(error="User not found"), 404
+
+        product.user = user  # Assign the user using SQLAlchemy ORM
+        db.session.commit()
+
+        return jsonify(success=f"Product {product_id} assigned to user {user_id}"), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(error=str(e)), 500
 
 @products_bp.route("/products/<product_id>")
 def get_product(product_id):
@@ -37,9 +57,11 @@ def get_product(product_id):
 @products_bp.route("/products")
 def get_products():
 
+    user = User.query.get(1)
+    print(f"User products:{user.products}")
     try:
         products = Product.query.all()
-        current_app.logger.info(f"Products retrieved: {[product.id for product in products]} by func: {get_product.__name__}")
+        current_app.logger.info(f"Products retrieved: {", ".join([product.id for product in products])} by func: {get_product.__name__}")
         return jsonify([product.to_dict() for product in products]), 200
 
     except Exception as e:
@@ -60,15 +82,20 @@ def edit_product(product_id):
             return jsonify(error=f"Invalid field(s): {", ".join(invalid_fields)} for product: {edited_product.name}."), 400
         # Applying changes:
         # Check if the name property is going to be changed, and if new one is unique:
-        if data["name"] != edited_product.name and data["name"]:
+        if data.get("name") != edited_product.name and data.get("name"):
             # Check for Existing Product of the entered name
-            if Product.query.filter(Product.name == data["name"], Product.id != edited_product.id).first():
+            if Product.query.filter(name=data["name"]).first():
                 return jsonify(error="A product of this name already exists."), 400
+
+        # Check if the Name field is not empty
+        if data.get("name")is not None and data.get("name").strip() == "":
+            return jsonify(error="Product name cannot be empty."), 400
 
         for key, value in data.items():
             if key != "name" or (key == 'name' and value != edited_product.name):
                 setattr(edited_product, key, value)
         db.session.commit()
+        current_app.logger.info(f"Correctly updated the Product: {edited_product.name}.")
         return jsonify(edited_product.to_dict()), 200
 
     except NotFound:
@@ -88,7 +115,7 @@ def delete_product(product_id):
         db.session.delete(deleted_product)
         db.session.commit()
         current_app.logger.info(f"Product: {deleted_product.name} successfully deleted from the database.")
-        return jsonify(success=f"Successfully deleted the product: {deleted_product.name}.")
+        return jsonify(success=f"Successfully deleted the product: {deleted_product.name}."), 200
 
     except NotFound:
         current_app.logger.warning(f"Product with ID: {product_id} not found.")
@@ -114,14 +141,21 @@ def add_product():
         current_app.logger.error("Unable to post a new product: name already taken.")
         return jsonify(error=f"A product of such a name already exists"), 400
 
+    # Check if the Name field is not empty:
+    if data["name"] is not None and data["name"].strip() == "":
+        return jsonify(error="Product name cannot be empty."), 400
+
+    # Creating a new Product:
     try:
         new_product = Product()
         for key, value in data.items():
             setattr(new_product, key, value)
         # Set stock to 0
         setattr(new_product,"stock", 0)
+        new_product.user_id = 1
         db.session.add(new_product)
         db.session.commit()
+        assign_user_to_product(new_product.id, new_product.user_id)
         current_app.logger.info(f"Successfully added a new product: {new_product.name} to the database.")
         return jsonify(success=f"Successfully created a new product: {new_product.name} (ID: {new_product.id})!"), 200
 

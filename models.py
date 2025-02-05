@@ -42,6 +42,8 @@ class Entry(db.Model):
     date: Mapped[str] = mapped_column(String(250), nullable=False)
     document_nr: Mapped[str] = mapped_column(String(250), unique=True, nullable=False)
     transaction_type: Mapped[str] = mapped_column(Enum("Supply", "Purchase", name="transaction_type_enum"), nullable=False)
+    REQUIRED_FIELDS = ["date", "document_nr", "transaction_type", "company"]
+    TRANSACTION_TYPES = ["Purchase", "Supply"]
 
     # Relationship of Many to Many with Product through LineItem Model, here the Parent for LineItem
     line_items: Mapped[list["LineItem"]] = relationship("LineItem", back_populates="entry")
@@ -104,6 +106,19 @@ class Company(db.Model):
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"))
     user: Mapped["User"] = relationship("User", back_populates="companies")
 
+    def to_dict(self):
+        """Returns all fields, including the non-editable ones."""
+        return {column.name: getattr(self, column.name) for column in self.__table__.columns}
+
+    @classmethod
+    def editable_fields(self):
+        """Returns a dictionary of fields that are editable by the user."""
+        return {
+            "name": self.name,
+            "address": self.address,
+            "contact_person": self.contact_person,
+            "contact_number": self.contact_number,
+        }
 
 class ProductCompany(db.Model):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -123,6 +138,7 @@ class LineItem(db.Model):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     quantity: Mapped[float] = mapped_column(Float, nullable=False)
     price_per_unit: Mapped[float] = mapped_column(Float, nullable=False)
+    REQUIRED_FIELDS = ["quantity", "price_per_unit", "product"]
 
     # A relationship of One to Many with the Entry, here the Child of Entry
     entry_id: Mapped[int] = mapped_column(Integer, ForeignKey("entries.id"))
