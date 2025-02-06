@@ -42,7 +42,7 @@ class Entry(db.Model):
     date: Mapped[str] = mapped_column(String(250), nullable=False)
     document_nr: Mapped[str] = mapped_column(String(250), unique=True, nullable=False)
     transaction_type: Mapped[str] = mapped_column(Enum("Supply", "Purchase", name="transaction_type_enum"), nullable=False)
-    REQUIRED_FIELDS = ["date", "document_nr", "transaction_type", "company"]
+    REQUIRED_FIELDS = ["date", "document_nr", "transaction_type", "company", "line_items"]
     TRANSACTION_TYPES = ["Purchase", "Supply"]
 
     # Relationship of Many to Many with Product through LineItem Model, here the Parent for LineItem
@@ -55,6 +55,10 @@ class Entry(db.Model):
     # Relationship of Many to One with user, here the Child for the User
     user_id : Mapped[int] = mapped_column(Integer, ForeignKey("users.id"))
     user: Mapped["User"] = relationship("User", back_populates="entries")
+
+    def to_dict(self):
+        """Returns all fields, including the non-editable ones."""
+        return {column.name: getattr(self, column.name) for column in self.__table__.columns}
 
 class Product(db.Model):
     __tablename__ = "products"

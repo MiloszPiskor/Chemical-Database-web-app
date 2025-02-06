@@ -71,6 +71,8 @@ app = Flask(__name__)
 app.register_blueprint(companies_bp)
 app.register_blueprint(products_bp)
 app.register_blueprint(users_bp)
+app.register_blueprint(entries_bp)
+
 # Logging setup
 if not app.debug:
     handler = logging.FileHandler("app.log")
