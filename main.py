@@ -3,18 +3,17 @@ import logging
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import UserMixin, login_user, LoginManager, current_user, logout_user, login_required, login_manager
 from flask_ckeditor import CKEditor
-from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect
 from sqlalchemy.orm import DeclarativeBase
 from flask_bootstrap import Bootstrap5
-from datetime import date
-from models import User, Product, Company, LineItem, ProductCompany, db
+from models import User, Product, Company
 from forms import RegisterForm, LoginForm, EntryForm, CompanyForm, ProductForm
 from companies import companies_bp
 from products import products_bp
 from users import users_bp
 from entries import entries_bp
 from dotenv import load_dotenv
+from extensions import db
 import os
 
 def user_check(email):
@@ -139,110 +138,6 @@ def add_entry():
     form.company_name.choices = [(p.id, p.name) for p in user_companies]
 
     return render_template('add_entry.html', form=form)
-
-# @app.route("/products")
-# @login_required
-# def products():
-#     return render_template('products.html')
-#
-# @app.route("/edit-product")
-# @login_required
-# def edit_product():
-#
-#     id = int(request.args.get('product_id'))
-#     product = Product.query.filter_by(id = id).first()
-#     form = ProductForm(
-#         name = product.name,
-#         customs_code = product.customs_code,
-#         img_url = product.img_url
-#     )
-#     if form.validate_on_submit():
-#         try:
-#             for key, value in form.data.items():
-#                 setattr(product, key, value)
-#             db.session.commit()
-#             flash(f"Successfully implemented changes to the: {product.name}")
-#             app.logger.info(f"Changes implemented for product: {product.id}.")
-#             return redirect(url_for('products'))
-#         except Exception as e:
-#             db.session.rollback()
-#             app.logger.error(f"Error {e} occurred while editing Product", exc_info=True)
-#             flash(f"An error occurred while implementing changes for: {product.name}. Please try again", "danger")
-#             return redirect(url_for('products'))
-#
-#
-#
-#
-#     return render_template('product.html', form = form)
-#
-# @app.route("/delete-product")
-# @login_required
-# def delete_product():
-#
-#     id = request.args.get('product_id')
-#     product = Product.query.filter_by(id=id).first()
-#
-#
-# @app.route("/companies")
-# @login_required
-# def companies():
-#     return render_template('companies.html')
-#
-# @app.route("/new-company", methods=["GET", "POST"])
-# @login_required
-# def add_company():
-#
-#     form = CompanyForm()
-#
-#     return render_template('add_company.html', form=form)
-#
-# @app.route("/new-product", methods=["GET", "POST"])
-# @login_required
-# def add_product():
-#
-#     form = ProductForm()
-#     if form.validate_on_submit():
-#         product_check(name=form.name.data)
-#         new_product = Product(
-#             name = form.name.data,
-#             customs_code = form.customs_code.data,
-#             img_url = form.img_url.data,
-#             stock= 0,
-#             user = current_user
-#         )
-#         try:
-#             db.session.add(new_product)
-#             db.session.commit()
-#             app.logger.info(f"New user {new_product.name} added to the database.")
-#             flash(f"Success! Added a new product: {new_product.name} to the database.")
-#             return redirect(url_for('products'))
-#         except Exception as e:
-#             db.session.rollback()
-#             app.logger.error(f"Error {e} occurred while adding new Product.", exc_info=True)
-#             flash(f"An error occurred while adding: {new_product.name} to the database. Please try again", "danger")
-#             return redirect(url_for('add_product'))
-#
-#
-#
-#
-#     return render_template('add_product.html', form=form)
-
-# Two routes handling the AJAX Forms update
-@app.route("/add_product_ajax", methods=["POST"])
-def add_product_ajax():
-    data = request.get_json()
-    new_product = Product(name=data["name"])
-    db.session.add(new_product)
-    db.session.commit()
-    return jsonify(success=True, product_id=new_product.id)
-
-@app.route("/add_company_ajax", methods=["POST"])
-def add_company_ajax():
-    data = request.get_json()
-    new_company = Company(name=data["name"])
-    db.session.add(new_company)
-    db.session.commit()
-    return jsonify(success=True, company_id=new_company.id)
 
 if __name__ == "__main__":
     app.run(debug=True, port=5002)

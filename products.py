@@ -61,7 +61,7 @@ def get_products():
     print(f"User products:{user.products}")
     try:
         products = Product.query.all()
-        current_app.logger.info(f"Products retrieved: {", ".join([product.id for product in products])} by func: {get_product.__name__}")
+        current_app.logger.info(f"Products retrieved: {", ".join([str(product.id) for product in products])} by func: {get_product.__name__}")
         return jsonify([product.to_dict() for product in products]), 200
 
     except Exception as e:

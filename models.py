@@ -4,13 +4,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import Integer,Float, String, Text, ForeignKey, inspect, Enum
 from werkzeug.security import generate_password_hash, check_password_hash
-
-
-
-class Base(DeclarativeBase):
-    pass
-# Initialize SQLAlchemy
-db = SQLAlchemy(model_class=Base)
+from extensions import db
 
 class User(db.Model,UserMixin):
     __tablename__ = "users"
