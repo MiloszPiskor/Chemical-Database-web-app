@@ -4,7 +4,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.exceptions import NotFound
 from models import User, Product, Company, Entry, LineItem, ProductCompany, db
-from validators import validate_json_payload, validate_document_nr, validate_transaction_type, validate_date_format, validate_line_items
+from validator_funcs import validate_json_payload, validate_document_nr, validate_transaction_type, validate_date_format, validate_line_items
 from EntryService import EntryService
 from dotenv import load_dotenv
 import os

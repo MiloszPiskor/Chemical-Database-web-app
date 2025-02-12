@@ -13,11 +13,16 @@ def validate_json_payload(func):
         # If there's no data or the data is not in the expected format
         if not data:
             return jsonify(error="No JSON data found in the request body."), 400
-
+        # If there are any unexpected fields:
         if any(key not in Entry.REQUIRED_FIELDS for key in data.keys()):
             current_app.logger.error("Unable to post a new entry: invalid fields.")
             invalid_fields = [key for key in data if key not in Entry.REQUIRED_FIELDS]
             return jsonify(error=f"Invalid field(s): {", ".join(invalid_fields)} while trying to create a new entry."), 400
+        # If there are missing fields:
+        missing_fields = [key for key in Entry.REQUIRED_FIELDS if key not in data.keys()]
+        if missing_fields:
+            current_app.logger.error("Unable to post a new entry: missing fields.")
+            return jsonify(error=f"Missing field(s): {", ".join(missing_fields)} while trying to create a new entry."), 400
 
         kwargs['data'] = data
         return func(*args, **kwargs)
@@ -60,7 +65,7 @@ def validate_document_nr(func):
             current_app.logger.warning("Invalid document nr. format while trying to create new Entry.")
             return jsonify(
                 error=f"Invalid document number format: {data.get('document_nr')}. The accepted format example"
-                      f" for document nr.: 'WZ 123/02/2025', meaning: WZ (document nr)/(month)/year).")
+                      f" for document nr.: 'WZ 123/02/2025', meaning: WZ (document nr)/(month)/year)."), 400
 
         else:
             return func(*args, **kwargs)
@@ -77,7 +82,7 @@ def validate_transaction_type(func):
         if data.get('transaction_type') not in Entry.TRANSACTION_TYPES:
             current_app.logger.warning("Invalid data for the transaction_type property of the Entry.")
             return jsonify(
-                error=f"Invalid data in the 'transaction type' field. Should be {' or '.join(Entry.TRANSACTION_TYPES)}.")
+                error=f"Invalid data in the 'transaction type' field. Should be {' or '.join(Entry.TRANSACTION_TYPES)}."), 400
 
         else:
             return func(*args, **kwargs)
@@ -98,7 +103,7 @@ def validate_date_format(func):
             current_app.logger.warning("Invalid date format while trying to add the new Entry.")
             return jsonify(
                 error=f"Invalid date format: {data.get('date')} while adding new entry. The accepted date format is "
-                      f"ISO 8601, meaning: YYYY-MM-DD")
+                      f"ISO 8601, meaning: YYYY-MM-DD"), 400
 
         else:
             return func(*args, **kwargs)
@@ -107,8 +112,8 @@ def validate_date_format(func):
 
 def validate_line_items(func):
     """Ensures that all the given LineItems are valid: contain
-    all the required properties, actual Products existing in the
-    database and appropriate values for their price and quantity"""
+    all the required properties, !!!actual Products existing in the
+    database- moved to Utils as required querying!!! and appropriate values for their price and quantity"""
     @wraps(func)
     def wrapper_function(*args, **kwargs):
 
@@ -118,10 +123,12 @@ def validate_line_items(func):
 
             quantity = line_item.get('quantity')
             current_price = line_item.get('price_per_unit')
-
-            if quantity is None or current_price is None:
-                current_app.logger.warning(f"Fields 'quantity' or 'current_price' for LineItem are missing.")
-                return jsonify(error="Fields 'quantity' or 'current_price' cannot be empty."), 400
+            product = line_item.get('product')
+            # Check if any missing fields:
+            if quantity is None or current_price is None or product is None:
+                missing_fields = [field for field in LineItem.REQUIRED_FIELDS if field not in line_item]
+                current_app.logger.warning(f"Missing field(s): {', '.join(missing_fields)} while trying to create LineItem")
+                return jsonify(error=f"Missing field(s): {', '.join(missing_fields)} while trying to create new LineItem."), 400
 
             # Validate fields for LineItem:
             if any(key not in LineItem.REQUIRED_FIELDS for key in line_item):
@@ -129,7 +136,7 @@ def validate_line_items(func):
                 current_app.logger.warning(
                     f"Invalid field(s): {', '.join(invalid_fields)} for the LineItem(s) while creating new Entry")
                 return jsonify(
-                    error=f"Invalid field(s): {', '.join(invalid_fields)} while trying to create new Entry."), 400
+                    error=f"Invalid field(s): {', '.join(invalid_fields)} while trying to create new LineItem."), 400
             # Check if the quantity and price fields are greater than 0:
             if float(quantity) <= 0 or float(current_price) <= 0:
                 current_app.logger.warning(
