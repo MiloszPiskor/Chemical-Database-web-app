@@ -51,8 +51,16 @@ class Entry(db.Model):
     user: Mapped["User"] = relationship("User", back_populates="entries")
 
     def to_dict(self):
-        """Returns all fields, including the non-editable ones."""
-        return {column.name: getattr(self, column.name) for column in self.__table__.columns}
+        """Convert Entry object to a JSON-serializable dictionary."""
+        return {
+            "id": self.id,
+            "date": self.date,
+            "document_nr": self.document_nr,
+            "transaction_type": self.transaction_type,
+            "company_id": self.company_id,
+            "user_id": self.user_id,
+            "line_items": [line_item.to_dict() for line_item in self.line_items]  # Convert related objects to dicts
+        }
 
 class Product(db.Model):
     __tablename__ = "products"
@@ -94,6 +102,7 @@ class Company(db.Model):
     address: Mapped[str] = mapped_column(String(250), nullable=False)
     contact_person: Mapped[str] = mapped_column(String(250), nullable=True)
     contact_number: Mapped[str] = mapped_column(String(20), nullable=False)
+    EDITABLE_FIELDS = ["name", "address", "contact_person", "contact_number"]
 
     # Relationship of One to Many with Entry (PARENT)
     entries: Mapped[list["Entry"]] = relationship("Entry", back_populates="company")
@@ -147,4 +156,12 @@ class LineItem(db.Model):
     product_id: Mapped[int] = mapped_column(Integer, ForeignKey("products.id"))
     product: Mapped["Product"] = relationship("Product", back_populates="line_items")
 
+    def to_dict(self):
+        """Convert LineItem object to a JSON-serializable dictionary."""
+        return {
+            "id": self.id,
+            "product_name": self.product_name,
+            "quantity": self.quantity,
+            "price_per_unit": self.price_per_unit
+        }
 

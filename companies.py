@@ -11,18 +11,12 @@ from flask_bootstrap import Bootstrap5
 from datetime import date
 from models import User, Product, Company, LineItem, ProductCompany, db
 from forms import RegisterForm, LoginForm, EntryForm, CompanyForm, ProductForm
+from utils import validate_company_data
 from dotenv import load_dotenv
 import os
 import logging
 
-
 companies_bp = Blueprint("companies", __name__)
-
-def company_check(name):
-    """A function that checks if a company entered in the Company Form
-    already exists in a database."""
-    check_for_company = Company.query.filter_by(name=name).first()
-    return check_for_company
 
 def assign_company_to_user(user_id, company_id):
     try:
@@ -53,7 +47,7 @@ def get_company(company_id):
     try:
         company = db.get_or_404(Company, company_id)
         current_app.logger.info(f"Company retrieved: {company.id} by func: {get_company.__name__}")
-        return jsonify(company.to_dict()), 200
+        return jsonify(company=company.to_dict()), 200
 
     except NotFound:
         current_app.logger.warning(f"Company with ID: {company_id} not found.")
@@ -68,7 +62,8 @@ def get_companies():
 
     print(f"Companies of the user:{User.query.get(1).companies}")
     try:
-        companies = Company.query.all()
+        user = User.query.get(1)
+        companies = user.companies
         current_app.logger.info(f"Companies retrieved: {", ".join([str(company.id) for company in companies])}")
         return jsonify([company.to_dict() for company in companies]), 200
 
@@ -85,20 +80,12 @@ def edit_company(company_id):
         edited_company = db.get_or_404(Company, company_id)
         print(edited_company.name, edited_company.id)
         data = request.get_json()
-        # Check if all the fields are valid:
-        if any(key not in edited_company.editable_fields() for key in data):
-            invalid_fields=[key for key in data if key not in edited_company.editable_fields()]
-            current_app.logger.warning(f"Invalid field(s): {', '.join(invalid_fields)}")
-            return jsonify(error=f"Invalid field(s): {", ".join(invalid_fields)} for company: {edited_company.name}."), 400
-        # Check if the Name field is empty:
-        if data.get("name") is None and data.get("name").strip() == "":
-            current_app.logger.warning(f"Empty Name field while editing a Company")
-            return jsonify(error="Product name cannot be empty."), 400
-        # Check if Name, if being changed, is not already taken:
-        if data["name"] != edited_company.name:
-            if Company.query.filter_by(name=data["name"]).first():
-                current_app.logger.warning(f"Not unique name for editing a Company")
-                return jsonify(error="This name is already occupied by another Company."), 400
+
+        # Validate the json payload:
+        validation_error = validate_company_data(data = data, is_update = True, company_instance = edited_company)
+        if validation_error:
+            return jsonify(error=validation_error), 400
+
         # Apply changes:
         for key, value in data.items():
             # Set the attribute Name only when it is being changed, avoiding IntegrityError:
@@ -142,20 +129,11 @@ def delete_company(company_id):
 def add_company():
 
     data = request.get_json()
-    # Check if the keys from the body match the required ones:
-    if any(key not in Company.editable_fields().keys() for key in data.keys()):
-        current_app.logger.error("Unable to post a new company: invalid fields.")
-        invalid_fields = [key for key in data if key not in Company.editable_fields().keys()]
-        return jsonify(error=f"Invalid field(s): {", ".join(invalid_fields)}."), 400
 
-    # Check if the Name from the form is not already occupied:
-    if data.get("name") in [company.name for company in Company.query.all()]:
-        current_app.logger.error("Unable to post a new company: name already taken.")
-        return jsonify(error=f"The company of a name: {data["name"]} already exists."), 400
-
-    # Check if the Name field is not empty:
-    if data.get("name") is not None and data.get("name").strip() == "":
-        return jsonify(error="Product name cannot be empty."), 400
+    # Validate the json payload:
+    validation_error = validate_company_data(data = data, is_update = False)
+    if validation_error:
+        return jsonify(error=validation_error), 400
 
     # Creating a new Company:
     try:

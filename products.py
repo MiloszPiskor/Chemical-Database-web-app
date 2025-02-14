@@ -61,7 +61,7 @@ def get_products():
     user = User.query.get(1)
     print(f"User products:{user.products}")
     try:
-        products = Product.query.all()
+        products = user.products
         current_app.logger.info(f"Products retrieved: {", ".join([str(product.id) for product in products])} by func: {get_product.__name__}")
         return jsonify([product.to_dict() for product in products]), 200
 

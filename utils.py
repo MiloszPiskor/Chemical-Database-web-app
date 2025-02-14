@@ -1,7 +1,7 @@
 from flask import jsonify, current_app
 from datetime import datetime
 from extensions import db
-from models import Product, ProductCompany
+from models import Product, ProductCompany, Company
 
 def product_check(name):
     """A function that checks if a product entered in the Product Form
@@ -9,6 +9,12 @@ def product_check(name):
     specific Product page"""
     check_for_product = Product.query.filter_by(name=name).first()
     return check_for_product
+
+def company_check(name):
+    """A function that checks if a company entered in the Company Form
+    already exists in a database."""
+    check_for_company = Company.query.filter_by(name=name).first()
+    return check_for_company
 
 def single_line_item_validation(line_items_list):
     """Validate LineItems separately before DB transactions"""
@@ -83,17 +89,9 @@ def validate_product_update(data, edited_product):
 
     return None
 
-def validate_product_data(data, product_instance=None, is_update=False):
-    """Validate product data before adding/updating a product.
+def validate_product_data(data, product_instance = None, is_update = False):
+    """Validate product data before adding/updating a product."""
 
-    Args:
-        data (dict): The request payload containing product details.
-        product_instance (Product, optional): The existing product instance for updates. Defaults to None.
-        is_update (bool): Whether the operation is an update. Defaults to False.
-
-    Returns:
-        tuple or None: (error_message, status_code) if validation fails, None if valid.
-    """
     # Check for invalid fields
     invalid_fields = [key for key in data if key not in Product.EDITABLE_FIELDS]
     if invalid_fields:
@@ -116,3 +114,31 @@ def validate_product_data(data, product_instance=None, is_update=False):
                 return "A product of this name already exists."
 
     return None  # Validation passed
+
+def validate_company_data(data, company_instance = None, is_update = False):
+    """Validate company data before adding/updating a company."""
+
+    # Check if all the fields are valid:
+    invalid_fields = [key for key in data if key not in Company.EDITABLE_FIELDS]
+    if invalid_fields:
+        current_app.logger.warning(f"Invalid field(s): {', '.join(invalid_fields)} while editing product.") if is_update\
+            else current_app.logger.error(f"Unable to post a new company due to invalid fields: {', '.join(invalid_fields)}.")
+        return f"Invalid field(s): {', '.join(invalid_fields)}."
+
+    # Check any field is empty:
+    missing_fields = [key for key in Company.EDITABLE_FIELDS if key not in data or (isinstance(data[key], str) and data[key].strip() == "")]
+    if missing_fields:
+        current_app.logger.warning("Empty fields for a Company model.")
+        return f"The following fields cannot be empty: {', '.join(missing_fields)}."
+
+    # Check if introduced name is not already taken:
+    if (is_update and company_instance.name != data.get('name')) or not is_update:
+        if is_update:
+            current_app.logger.info(
+                f"Attempting to rename company '{company_instance.name}' to '{data['name']}'. Checking availability...")
+
+        if company_check(data.get('name')):
+            current_app.logger.warning(f"Not unique name: {data["name"]} for editing a Company") if is_update \
+                else current_app.logger.warning(f"Unable to post a new company: name {data['name']} already taken.")
+            return "This name is already occupied by another Company."
+

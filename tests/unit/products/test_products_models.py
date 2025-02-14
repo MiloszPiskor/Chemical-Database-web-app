@@ -7,8 +7,6 @@ from flask import has_request_context, request
 
 from werkzeug.exceptions import NotFound
 
-from products import User, Product
-
 # Add the directory containing 'models.py' to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 
@@ -31,8 +29,8 @@ class TestProductModels:
         ]
     )
     @patch("products.User.query")
-    @patch("products.Product.query")
-    def test_get_products(self,mock_product_query, mock_user_query, mock_product_data, expected_product_count, expected_status_code, app):
+    @patch('products.user.products')
+    def test_get_products(self, mock_user_products, mock_user_query, mock_product_data, expected_product_count, expected_status_code, app):
         """Unit test for get_product without using a real database."""
 
         # Prepare the mock products list
@@ -43,7 +41,7 @@ class TestProductModels:
             mock_products.append(mock_product)
 
         # Mock the database queries
-        mock_product_query.all.return_value = mock_products
+        mock_user_products.return_value = mock_products
         mock_user_query.get.return_value = MagicMock(spec=User)
 
         # Call the function directly (not through Flask)
@@ -56,7 +54,7 @@ class TestProductModels:
         status_code = result[1]
 
         # Assertions
-        mock_product_query.all.assert_called_once()  # Ensure Product.query.all was called
+        mock_user_products.assert_called_once()  # Ensure Product.query.all was called
         mock_user_query.get.assert_called_once_with(1)  # Ensure User.query.get was called with 1
 
         # Check the returned status code

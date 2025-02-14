@@ -58,7 +58,8 @@ def get_entry(entry_id):
 def get_entries():
 
     try:
-        entries = Entry.query.all()
+        user = User.query.get(1)
+        entries = user.entries
         current_app.logger.info(
         f"Entries retrieved: {", ".join([str(entry.id) for entry in entries])} by func: {get_entries.__name__}") # May consider if it's not hindering the performance of the code
         print(f"Line items of each : {", ".join([str(entry.line_items) for entry in entries])}")
