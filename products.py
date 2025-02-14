@@ -6,6 +6,7 @@ from flask_ckeditor import CKEditor
 from datetime import date
 from werkzeug.exceptions import NotFound, BadRequest, InternalServerError
 from models import User, Product, Company, LineItem, ProductCompany, db
+from utils import validate_product_update, validate_product_data
 from forms import ProductForm
 import random
 import os
@@ -75,22 +76,11 @@ def edit_product(product_id):
         edited_product = db.get_or_404(Product, product_id)
         print(edited_product.name, edited_product.id)
         data = request.get_json()
-        # Check if attribute not in Product attributes:
-        if any(key not in edited_product.editable_fields() for key in data):
-            invalid_fields=[key for key in data if key not in edited_product.editable_fields().keys()]
-            current_app.logger.warning(f"Invalid field for Patching product with ID: {edited_product.id}.")
-            return jsonify(error=f"Invalid field(s): {", ".join(invalid_fields)} for product: {edited_product.name}."), 400
+        # Validation of the json payload:
+        validation_error = validate_product_data(data=data, is_update=True, product_instance= edited_product)
+        if validation_error:
+            return jsonify(error=validation_error), 400
         # Applying changes:
-        # Check if the name property is going to be changed, and if new one is unique:
-        if data.get("name") != edited_product.name and data.get("name"):
-            # Check for Existing Product of the entered name
-            if Product.query.filter(name=data["name"]).first():
-                return jsonify(error="A product of this name already exists."), 400
-
-        # Check if the Name field is not empty
-        if data.get("name")is not None and data.get("name").strip() == "":
-            return jsonify(error="Product name cannot be empty."), 400
-
         for key, value in data.items():
             if key != "name" or (key == 'name' and value != edited_product.name):
                 setattr(edited_product, key, value)
@@ -130,21 +120,10 @@ def delete_product(product_id):
 def add_product():
 
     data = request.get_json()
-    # Check if the keys from the body match the required ones:
-    if any(key not in random.choice(Product.query.all()).editable_fields().keys() for key in data.keys()):
-        current_app.logger.error("Unable to post a new product: invalid fields.")
-        invalid_fields = [key for key in data if key not in random.choice(Product.query.all()).editable_fields().keys()]
-        return jsonify(error=f"Invalid field(s): {", ".join(invalid_fields)}."), 400
-
-    # Check if a product of a selected name already exists:
-    if product_check(data["name"]):
-        current_app.logger.error("Unable to post a new product: name already taken.")
-        return jsonify(error=f"A product of such a name already exists"), 400
-
-    # Check if the Name field is not empty:
-    if data["name"] is not None and data["name"].strip() == "":
-        return jsonify(error="Product name cannot be empty."), 400
-
+    # Validation of the json payload:
+    validation_error = validate_product_data(data = data, is_update=False)
+    if validation_error:
+        return jsonify(error=validation_error), 400
     # Creating a new Product:
     try:
         new_product = Product()

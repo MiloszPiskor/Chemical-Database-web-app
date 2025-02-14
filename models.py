@@ -62,6 +62,7 @@ class Product(db.Model):
     stock: Mapped[float] = mapped_column(Float, nullable=False)
     customs_code: Mapped[str] = mapped_column(String(250), nullable=False)
     img_url: Mapped[str] = mapped_column(String(250), nullable=False)
+    EDITABLE_FIELDS = ["name", "customs_code", "img_url"]
 
     # Relationship of Many to Many with Company through ProductCompany Model, here the Parent for ProductCompany
     product_companies: Mapped[list["ProductCompany"]] = relationship("ProductCompany", back_populates="product")
