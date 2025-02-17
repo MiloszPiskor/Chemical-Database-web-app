@@ -12,15 +12,7 @@ class User(db.Model,UserMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(250), nullable=False)
     email: Mapped[str] = mapped_column(String(250), nullable=False)
-    password_hash: Mapped[str] = mapped_column(String(100))
-
-    # Hashed password management:
-    def set_password(self, password):
-        self.password_hash= generate_password_hash(password, method='pbkdf2:sha256', salt_length=8)
-
-    def check_password(self, password):
-        return check_password_hash(password=password, pwhash=self.password_hash)
-
+    auth0_sub: Mapped[str] = mapped_column(String(250), unique=True, nullable=False)
 
     # User relationships with the DB Models, All One to Many (Parent)
     entries: Mapped[list["Entry"]] = relationship("Entry", back_populates="user")

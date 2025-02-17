@@ -1,75 +1,34 @@
 from functools import wraps
 import logging
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
-from flask_login import UserMixin, login_user, LoginManager, current_user, logout_user, login_required, login_manager
+from flask import Flask, request, redirect, url_for, flash, jsonify, session
 from flask_ckeditor import CKEditor
 from sqlalchemy import inspect
 from sqlalchemy.orm import DeclarativeBase
 from flask_bootstrap import Bootstrap5
 from models import User, Product, Company
-from forms import RegisterForm, LoginForm, EntryForm, CompanyForm, ProductForm
 from companies import companies_bp
 from products import products_bp
-from users import users_bp
 from entries import entries_bp
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 from extensions import db
+from utils import requires_auth, get_auth0_public_key
 import os
+import json
 
-def user_check(email):
-    """A function making a check during registration for User in Database,
-     if they exist redirects them to the login page."""
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 
-    check_for_user = User.query.filter_by(email=email).first()
-    if check_for_user:
-        flash("You are already registered in our database. Please log in.")
-        email = email
-        return redirect(url_for("login", email=email))
-
-def product_check(name):
-    """A function that checks if a product entered in the Product Form
-    already exists in a database, if it does it redirects the User to the
-    specific Product page"""
-    check_for_product = Product.query.filter_by(name=name).first()
-    if check_for_product:
-        flash("This product already exists in the database.")
-        return redirect(url_for("products"))
-
-def _url_has_allowed_host_and_scheme(url, allowed_hosts, require_https=False):
-    if url is not None:
-        url = url.strip()
-
-    if not url:
-        return False
-
-    if allowed_hosts is None:
-        allowed_hosts = set()
-    elif isinstance(allowed_hosts, str):
-        allowed_hosts = {allowed_hosts}
-
-    # Normalize the path by replacing backslashes with forward slashes
-    normalized_url = url.replace('\\', '/')
-
-    return True
-
-def admin_only(function):
-    @wraps(function)
-    def wrapper_function(*args, **kwargs):
-        if current_user.is_authenticated and current_user.id == 1:
-            return function(*args, **kwargs)
-        else:
-            return jsonify(error = "Unauthorized access"), 401
-    return wrapper_function
+from urllib.parse import quote_plus, urlencode
+from authlib.integrations.flask_client import OAuth
 
 # Loading the environment variables
 load_dotenv()
 
 # Initialising the app
 app = Flask(__name__)
+app.config['TEMPLATES_AUTO_RELOAD'] = False
 # Registering the blueprints
 app.register_blueprint(companies_bp)
 app.register_blueprint(products_bp)
-app.register_blueprint(users_bp)
 app.register_blueprint(entries_bp)
 
 # Logging setup
@@ -81,12 +40,22 @@ if not app.debug:
 ckeditor = CKEditor(app)
 bootstrap = Bootstrap5(app)
 
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
-# Login Manager setup
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = "login"
-login_manager.login_message = u"Please login first."
+app.secret_key = os.getenv('APP_SECRET_KEY')
+
+# Auth0 setup
+oauth = OAuth(app)
+
+oauth.register(
+    "auth0",
+    client_id=os.getenv("AUTH0_CLIENT_ID"),
+    client_secret=os.getenv("AUTH0_CLIENT_SECRET"),
+    client_kwargs={
+        "scope": "openid profile email",
+        "audience": os.getenv("AUTH0_AUDIENCE"),
+        "prompt": "login"
+    },
+    server_metadata_url=f'https://{os.getenv("AUTH0_DOMAIN")}/.well-known/openid-configuration'
+)
 
 # CREATE DATABASE
 class Base(DeclarativeBase):
@@ -113,31 +82,39 @@ with app.app_context():
     else:
         print("The database exists, no need to initialize the Model.")
 
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.filter_by(id=user_id).first()
 
-@app.route("/")
-def home():
+@app.route("/login", methods=["GET"])
+def login():
+    auth0_login_url = oauth.auth0.authorize_redirect(
+        redirect_uri=url_for("callback", _external=True),
+        audience=os.getenv("AUTH0_AUDIENCE"),
+        scope="openid profile email",
+    ).location
+    print(url_for("callback", _external=True))
+    print("AUTH0_AUDIENCE:", os.getenv("AUTH0_AUDIENCE"))
 
-    return render_template("index.html")
+    return jsonify({"login_url": auth0_login_url}), 200
 
-@app.route("/new-entry", methods=["GET", "POST"])
-@login_required
-def add_entry():
+@app.route("/callback", methods=["GET", "POST"])
+def callback():
+    token = oauth.auth0.authorize_access_token()
+    print("Token Audience:", token.get("aud", "MISSING_AUD"))
 
-    form = EntryForm()
-    # Filling the Select Field for products registered by the current user
-    # user_products = current_user.products # Product.query.order_by(Product.name).all()  SETUP FOR PRODUCTION AFTER ADDING LOGGING
-    user_products = Product.query.order_by(Product.name).all()
-    form.product_name.choices = [(p.id, p.name) for p in user_products]
+    print("TOKEN RECEIVED:", json.dumps(token, indent=2))  # Debugging
+    print("AUTH0_AUDIENCE from ENV:", os.getenv("AUTH0_AUDIENCE"))
+    print("Token Audience:", token.get("aud", "MISSING_AUD"))
+    session["user"] = token
+    return jsonify({"access_token": token["access_token"]}), 200
 
-    # Filling the Select Field for companies registered by the current user
-    # user_companies = current_user.companies SETUP FOR PRODUCTION AFTER ADDING LOGGING
-    user_companies = Company.query.order_by(Company.name).all()
-    form.company_name.choices = [(p.id, p.name) for p in user_companies]
+@app.route("/protected", methods=["GET"])
+@requires_auth
+def protected():
+    # Print the raw Authorization header (which contains the JWT token)
+    # Access specific fields like nickname or email
 
-    return render_template('add_entry.html', form=form)
+    print("User Payload:", request.user)
+    return jsonify({"message": "You have access!", "user": request.user})
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=5002)

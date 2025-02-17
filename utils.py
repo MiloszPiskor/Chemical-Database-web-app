@@ -1,7 +1,29 @@
-from flask import jsonify, current_app
+import os
+from functools import wraps
+import requests
+from flask import jsonify, current_app, request, g
 from datetime import datetime
 from extensions import db
 from models import Product, ProductCompany, Company
+from users import get_or_create_user_from_token
+import json
+from dotenv import load_dotenv
+from authlib.integrations.flask_client import OAuth
+import jwt
+from jwt.algorithms import RSAAlgorithm
+from requests.exceptions import RequestException
+
+# Loading the environment variables
+load_dotenv()
+
+def get_auth0_public_key():
+    """Fetches Auth0's public key to verify JWTs (only once)."""
+    url = f"https://{os.getenv('AUTH0_DOMAIN')}/.well-known/jwks.json"
+    response = requests.get(url)
+    jwks = response.json()["keys"]
+    return {key["kid"]: RSAAlgorithm.from_jwk(json.dumps(key)) for key in jwks}  # Convert JWKS to a public key
+
+AUTH0_PUBLIC_KEYS = get_auth0_public_key()
 
 def product_check(name):
     """A function that checks if a product entered in the Product Form
@@ -9,6 +31,28 @@ def product_check(name):
     specific Product page"""
     check_for_product = Product.query.filter_by(name=name).first()
     return check_for_product
+
+def get_user_product_or_404(product_id):
+    """Retrieve a product that belongs to the logged-in user. Return a 404 error if unauthorized."""
+    product = Product.query.filter_by(id=product_id, user_id=g.user.id).first()
+    print(f"Product: {product}")
+    if product is None:
+        return jsonify(error="Unauthorized or product not found!"), 404
+    return product
+
+def get_user_company_or_404(company_id):
+    """Retrieve a company that belongs to the logged-in user. Return a 404 error if unauthorized."""
+    company = Company.query.filter_by(id=company_id, user_id=g.user.id).first()
+    if company is None:
+        return jsonify(error="Unauthorized or company not found!"), 404
+    return company
+
+def get_user_item_or_404(model, item_id): # Instead of 3 for every model- worth considering
+    """Retrieve an item (Product, Company, etc.) that belongs to the logged-in user. Return a 404 error if unauthorized."""
+    item = model.query.filter_by(id=item_id, user_id=g.user.id).first()
+    if item is None:
+        return jsonify(error=f"Unauthorized or {model.__name__.lower()} not found!"), 404
+    return item
 
 def company_check(name):
     """A function that checks if a company entered in the Company Form
@@ -64,30 +108,6 @@ def calculate_product_company(product_company, transaction_type, quantity):
     elif transaction_type == "Supply":
         product_company.total_quantity_supplied += quantity
 
-def validate_product_update(data, edited_product):
-    """Helper function to validate product update fields"""
-    # Check if attribute not in Product attributes:
-    if any(key not in edited_product.editable_fields() for key in data):
-        invalid_fields = [key for key in data if key not in edited_product.editable_fields().keys()]
-        current_app.logger.warning(f"Invalid fields: {invalid_fields}")
-        return f"Invalid field(s): {', '.join(invalid_fields)}."
-
-    # Check if the name property is going to be changed, and if new one is unique:
-    if data.get("name") and data.get("name") != edited_product.name:
-        current_app.logger.info(f"User changing the name of the product: {edited_product.name} to {data['name']}.\n"
-                                    f"Checking for name availability...")
-        # Check for Existing Product of the entered name:
-        if Product.query.filter_by(name=data["name"]).first():
-            current_app.logger.warning(f"Product of name: {data['name']} already exists.")
-
-            return "A product of this name already exists."
-    # Check if required fields are not not empty
-    for field in edited_product.editable_fields():
-        value = data.get(field)
-        if value is None or (isinstance(value, str) and value.strip() == ""):
-            return f"{field.capitalize()} cannot be empty."
-
-    return None
 
 def validate_product_data(data, product_instance = None, is_update = False):
     """Validate product data before adding/updating a product."""
@@ -141,4 +161,78 @@ def validate_company_data(data, company_instance = None, is_update = False):
             current_app.logger.warning(f"Not unique name: {data["name"]} for editing a Company") if is_update \
                 else current_app.logger.warning(f"Unable to post a new company: name {data['name']} already taken.")
             return "This name is already occupied by another Company."
+
+def extra_user_info_call(token):
+    """A function that fetches additional user information from Auth0."""
+    try:
+        user_info_url = f"https://{os.getenv('AUTH0_DOMAIN')}/userinfo"
+        user_info_response = requests.get(user_info_url, headers={
+            'Authorization': f'Bearer {token}'
+        })
+        s_code = user_info_response.status_code
+        if s_code == 200:
+            current_app.logger.info(f"Extra User info fetched successfully.")
+            user_info = user_info_response.json()
+            return user_info
+        else:
+            current_app.logger.error(f"Failed to fetch extra user info. Status code: {s_code}")
+            return None
+
+    except RequestException as e:
+        current_app.logger.error(f"Network error occurred while fetching user info: {str(e)}")
+        return None
+
+    except Exception as e:
+        current_app.logger.error(f"An error occurred while fetching extra user info: {str(e)}")
+        return None
+
+def requires_auth(f):
+
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", None)
+        if not auth_header:
+            return jsonify({"error": "Authorization header is missing"}), 401
+
+        parts = auth_header.split()
+        if parts[0].lower() != "bearer":
+            return jsonify({"error": "Authorization header must start with 'Bearer'"}), 401
+        elif len(parts) != 2:
+            return jsonify({"error": "Invalid Authorization header format"}), 401
+
+        token = parts[1]
+        try:
+            unverified_header = jwt.get_unverified_header(token)
+            key_id = unverified_header.get("kid")
+            if key_id not in AUTH0_PUBLIC_KEYS:
+                return jsonify({"error": "Invalid key ID"}), 401
+
+            payload = jwt.decode(
+                token,
+                AUTH0_PUBLIC_KEYS[key_id],
+                algorithms=["RS256"],
+                audience=os.getenv("AUTH0_AUDIENCE"),
+                issuer=f"https://{os.getenv('AUTH0_DOMAIN')}/",
+            )
+            # Fetch additional user info:
+            user_info = extra_user_info_call(token = token)
+            payload.update(user_info)  # Merge the user info into the payload
+
+            request.user = payload
+            # Sync the user with the database
+            user = get_or_create_user_from_token()
+            g.user = user # Store the user in the global context
+
+        except jwt.ExpiredSignatureError:
+            current_app.logger.error("Token expired")
+            return jsonify({"error": "Token expired"}), 401
+
+        except jwt.InvalidTokenError:
+            current_app.logger.error("Invalid token")
+            return jsonify({"error": "Invalid token"}), 401
+
+        return f(*args, **kwargs)
+    return decorated
+
+
 

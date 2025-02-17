@@ -1,41 +1,16 @@
 from functools import wraps
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Blueprint, current_app
-from flask_login import UserMixin, login_user, LoginManager, current_user, logout_user, login_required, login_manager
-from flask_ckeditor import CKEditor
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import inspect
-from sqlalchemy.orm import DeclarativeBase
+from flask import Flask, request, redirect, url_for, flash, jsonify, Blueprint, current_app, g
 from werkzeug.exceptions import NotFound
-from werkzeug.security import generate_password_hash, check_password_hash
-from flask_bootstrap import Bootstrap5
 from datetime import date
 from models import User, Product, Company, LineItem, ProductCompany, db
 from forms import RegisterForm, LoginForm, EntryForm, CompanyForm, ProductForm
-from utils import validate_company_data
+from utils import validate_company_data, requires_auth, get_user_company_or_404
+from users import get_or_create_user_from_token
 from dotenv import load_dotenv
 import os
 import logging
 
 companies_bp = Blueprint("companies", __name__)
-
-def assign_company_to_user(user_id, company_id):
-    try:
-        company = Company.query.get(company_id)
-        user = User.query.get(user_id)
-
-        if not company:
-            return jsonify(error="Company not found"), 404
-        if not user:
-            return jsonify(error="User not found"), 404
-
-        company.user = user  # Assign the user using SQLAlchemy ORM
-        db.session.commit()
-
-        return jsonify(success=f"Company {company_id} assigned to user {user_id}"), 200
-
-    except Exception as e:
-        db.session.rollback()
-        return jsonify(error=str(e)), 500
 
 # with app.app_context():
 #     if not current_app.debug:  # Ensure logging in production mode
@@ -126,6 +101,7 @@ def delete_company(company_id):
 
 
 @companies_bp.route("/companies", methods=["POST"])
+@requires_auth
 def add_company():
 
     data = request.get_json()
@@ -141,10 +117,12 @@ def add_company():
         for key, value in data.items():
             setattr(new_company, key, value)
 
-        new_company.user_id = 1
+        # Handling User:
+        user = g.user
+        new_company.user = user
+        # Committing the changes:
         db.session.add(new_company)
         db.session.commit()
-        assign_company_to_user(company_id=new_company.id, user_id=new_company.user_id)
         current_app.logger.info(f"Successfully added a new company: {new_company.name} to the database.")
         return jsonify(success=f"Successfully created a new company: {new_company.name} (ID: {new_company.id})!"), 200
 

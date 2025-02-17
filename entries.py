@@ -1,11 +1,13 @@
 from functools import wraps
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Blueprint, current_app
+from flask import Flask, request, redirect, url_for, flash, jsonify, Blueprint, current_app
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.exceptions import NotFound
 from models import User, Product, Company, Entry, LineItem, ProductCompany, db
 from validator_funcs import validate_json_payload, validate_document_nr, validate_transaction_type, validate_date_format, validate_line_items
 from EntryService import EntryService
+from users import get_or_create_user_from_token
+from utils import requires_auth
 from dotenv import load_dotenv
 import os
 import logging
