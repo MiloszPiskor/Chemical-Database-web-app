@@ -5,7 +5,8 @@ from flask_ckeditor import CKEditor
 from datetime import date
 from werkzeug.exceptions import NotFound, BadRequest, InternalServerError
 from models import User, Product, Company, LineItem, ProductCompany, db
-from utils import validate_product_data, requires_auth, get_user_product_or_404
+from utils import validate_product_data, requires_auth, get_user_item_or_404
+from werkzeug.exceptions import HTTPException
 from users import get_or_create_user_from_token
 
 from forms import ProductForm
@@ -26,15 +27,13 @@ def product_check(name):
 def get_product(product_id):
 
     try:
-        product = get_user_product_or_404(product_id)
-        if isinstance(product, tuple): # If the function returns a tuple, it means that the product was not found
-            return product
+        product = get_user_item_or_404(Product, product_id)
+
         current_app.logger.info(f"Product retrieved: {product.id} by func: {get_product.__name__}")
         return jsonify(product=product.to_dict()), 200
 
-    except NotFound:
-        current_app.logger.warning(f"Product with ID: {product_id} not found.")
-        return jsonify(error=f"Product of ID: {product_id} not found."), 404
+    except HTTPException as http_err:  # Let the Global 404 handler resolve the error
+        raise http_err
 
     except Exception as e:
         current_app.logger.error(f"Unexpected error in {get_product.__name__}: {str(e)}")
@@ -44,9 +43,10 @@ def get_product(product_id):
 @requires_auth
 def get_products():
 
-    user = g.user
-    print(f"User products:{user.products}")
     try:
+        user = g.user
+        print(f"User products:{user.products}")
+
         products = user.products
         current_app.logger.info(f"Products retrieved: {', '.join([str(product.id) for product in products])} by func: {get_product.__name__}")
         return jsonify([product.to_dict() for product in products]), 200
@@ -60,10 +60,8 @@ def get_products():
 def edit_product(product_id):
 
     try:
-        edited_product = get_user_product_or_404(product_id)
-        if isinstance(edited_product, tuple): # If the function returns a tuple, it means that the product was not found
-            return edited_product
-        print(edited_product.name, edited_product.id)
+        edited_product = get_user_item_or_404(Product, product_id)
+
         data = request.get_json()
         # Validation of the json payload:
         validation_error = validate_product_data(data=data, is_update=True, product_instance= edited_product)
@@ -77,9 +75,8 @@ def edit_product(product_id):
         current_app.logger.info(f"Correctly updated the Product: {edited_product.name}.")
         return jsonify(edited_product.to_dict()), 200
 
-    except NotFound:
-        current_app.logger.warning(f"Product with ID: {product_id} not found.")
-        return jsonify(error=f"Product of ID: {product_id} not found."), 404
+    except HTTPException as http_err:  # Let the Global 404 handler resolve the error
+        raise http_err
 
     except Exception as e:
         db.session.rollback()
@@ -91,17 +88,15 @@ def edit_product(product_id):
 def delete_product(product_id):
 
     try:
-        deleted_product = get_user_product_or_404(product_id)
-        if isinstance(deleted_product, tuple): # If the function returns a tuple, it means that the product was not found
-            return deleted_product
+        deleted_product = get_user_item_or_404(Product, product_id)
+
         db.session.delete(deleted_product)
         db.session.commit()
         current_app.logger.info(f"Product ID {deleted_product.id} successfully deleted.")
         return jsonify(success=f"Successfully deleted the product: {deleted_product.name}."), 200
 
-    except NotFound:
-        current_app.logger.warning(f"Product with ID: {product_id} not found.")
-        return jsonify(error=f"Product of ID: {product_id} not found."), 404
+    except HTTPException as http_err:  # Let the Global 404 handler resolve the error
+        raise http_err
 
     except Exception as e:
         db.session.rollback()

@@ -25,6 +25,10 @@ class EntryService:
             # Validate LineItems
             validated_line_items = single_line_item_validation(data.get('line_items'))
 
+            # Check if validation returned a response (error case)
+            if isinstance(validated_line_items, tuple):  # Flask responses return (jsonify(), status_code)
+                return validated_line_items  # Directly return the error response
+
             return EntryService.save_entry(data, validated_line_items, company_to_assign)
 
         except SQLAlchemyError as e:

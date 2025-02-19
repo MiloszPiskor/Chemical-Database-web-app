@@ -2,6 +2,7 @@ import pytest
 from flask import Flask, jsonify
 import sys
 import os
+from unittest.mock import patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 @pytest.fixture
@@ -20,6 +21,11 @@ def client(app):
 @pytest.fixture
 def runner(app):
     return app.test_cli_runner()
+
+@pytest.fixture(autouse=True)
+def mock_auth():
+    with patch('utils.requires_auth', side_effect=lambda f: f):  # Returns the function unchanged
+        yield
 
 
 

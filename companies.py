@@ -1,14 +1,7 @@
-from functools import wraps
 from flask import Flask, request, redirect, url_for, flash, jsonify, Blueprint, current_app, g
-from werkzeug.exceptions import NotFound
-from datetime import date
+from werkzeug.exceptions import NotFound, HTTPException
 from models import User, Product, Company, LineItem, ProductCompany, db
-from forms import RegisterForm, LoginForm, EntryForm, CompanyForm, ProductForm
-from utils import validate_company_data, requires_auth, get_user_company_or_404
-from users import get_or_create_user_from_token
-from dotenv import load_dotenv
-import os
-import logging
+from utils import validate_company_data, requires_auth, get_user_item_or_404
 
 companies_bp = Blueprint("companies", __name__)
 
@@ -17,27 +10,31 @@ companies_bp = Blueprint("companies", __name__)
 #         current_app.logger.setLevel(logging.INFO)
 
 @companies_bp.route("/companies/<int:company_id>")
+@requires_auth
 def get_company(company_id):
 
     try:
-        company = db.get_or_404(Company, company_id)
+        company = get_user_item_or_404(Company, company_id)
+
         current_app.logger.info(f"Company retrieved: {company.id} by func: {get_company.__name__}")
         return jsonify(company=company.to_dict()), 200
 
-    except NotFound:
-        current_app.logger.warning(f"Company with ID: {company_id} not found.")
-        return jsonify(error=f"Company of ID: {company_id} not found."), 404
+    except HTTPException as http_err: # Let the Global 404 handler resolve the error
+
+        raise http_err
 
     except Exception as e:
         current_app.logger.error(f"Unexpected error in {get_company.__name__}: {str(e)}")
         return jsonify(error="Internal server error"), 500
 
 @companies_bp.route("/companies")
+@requires_auth
 def get_companies():
 
-    print(f"Companies of the user:{User.query.get(1).companies}")
     try:
-        user = User.query.get(1)
+        user = g.user
+        print(f"User companies:{user.companies}")
+
         companies = user.companies
         current_app.logger.info(f"Companies retrieved: {", ".join([str(company.id) for company in companies])}")
         return jsonify([company.to_dict() for company in companies]), 200
@@ -46,16 +43,14 @@ def get_companies():
         current_app.logger.error(f"Unexpected error in {get_companies.__name__}: {str(e)}")
         return jsonify(error="Internal server error"), 500
 
-
-
 @companies_bp.route("/companies/<int:company_id>", methods=["PATCH"])
+@requires_auth
 def edit_company(company_id):
 
     try:
-        edited_company = db.get_or_404(Company, company_id)
-        print(edited_company.name, edited_company.id)
-        data = request.get_json()
+        edited_company = get_user_item_or_404(Company, company_id)
 
+        data = request.get_json()
         # Validate the json payload:
         validation_error = validate_company_data(data = data, is_update = True, company_instance = edited_company)
         if validation_error:
@@ -70,29 +65,30 @@ def edit_company(company_id):
         current_app.logger.info(f"Correctly updated the Company: {edited_company.name}.")
         return jsonify(edited_company.to_dict()), 200
 
+    except HTTPException as http_err: # Let the Global 404 handler resolve the error
 
-    except NotFound:
-        current_app.logger.warning(f"Company with ID: {company_id} not found.")
-        return jsonify(error=f"Company of ID: {company_id} not found."), 404
+        raise http_err
 
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Unexpected error in {edit_company.__name__}: {str(e)}")
-        return jsonify(error="Internal server error"), 500
+        return jsonify(error=f"Internal server error: {e}"), 500
 
 @companies_bp.route("/companies/<int:company_id>", methods=["DELETE"])
+@requires_auth
 def delete_company(company_id):
 
     try:
-        deleted_company = db.get_or_404(Company, company_id)
+        deleted_company = get_user_item_or_404(Company, company_id)
+
         db.session.delete(deleted_company)
         db.session.commit()
         current_app.logger.info(f"Company: {deleted_company.name} successfully deleted from the database.")
         return jsonify(success=f"Successfully deleted the company: {deleted_company.name}."), 200
 
-    except NotFound:
-        current_app.logger.warning(f"Company with ID: {company_id} not found.")
-        return jsonify(error=f"Company of ID: {company_id} not found."), 404
+    except HTTPException as http_err: # Let the Global 404 handler resolve the error
+
+        raise http_err
 
     except Exception as e:
         db.session.rollback()

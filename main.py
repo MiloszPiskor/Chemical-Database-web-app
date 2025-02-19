@@ -82,6 +82,11 @@ with app.app_context():
     else:
         print("The database exists, no need to initialize the Model.")
 
+# 404 Error Handler:
+@app.errorhandler(404)
+def resource_not_found(error):
+    """Error handler for 404 - Resource Not Found"""
+    return jsonify(error = error.description or "Resource not found"), 404
 
 @app.route("/login", methods=["GET"])
 def login():

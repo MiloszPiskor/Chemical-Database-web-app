@@ -1,7 +1,7 @@
 import os
 from functools import wraps
 import requests
-from flask import jsonify, current_app, request, g
+from flask import jsonify, current_app, request, g, abort
 from datetime import datetime
 from extensions import db
 from models import Product, ProductCompany, Company
@@ -32,26 +32,14 @@ def product_check(name):
     check_for_product = Product.query.filter_by(name=name).first()
     return check_for_product
 
-def get_user_product_or_404(product_id):
-    """Retrieve a product that belongs to the logged-in user. Return a 404 error if unauthorized."""
-    product = Product.query.filter_by(id=product_id, user_id=g.user.id).first()
-    print(f"Product: {product}")
-    if product is None:
-        return jsonify(error="Unauthorized or product not found!"), 404
-    return product
-
-def get_user_company_or_404(company_id):
-    """Retrieve a company that belongs to the logged-in user. Return a 404 error if unauthorized."""
-    company = Company.query.filter_by(id=company_id, user_id=g.user.id).first()
-    if company is None:
-        return jsonify(error="Unauthorized or company not found!"), 404
-    return company
-
 def get_user_item_or_404(model, item_id): # Instead of 3 for every model- worth considering
     """Retrieve an item (Product, Company, etc.) that belongs to the logged-in user. Return a 404 error if unauthorized."""
     item = model.query.filter_by(id=item_id, user_id=g.user.id).first()
+
     if item is None:
-        return jsonify(error=f"Unauthorized or {model.__name__.lower()} not found!"), 404
+        current_app.logger.error(f"Unauthorized or {model.__name__.lower()} with ID: {item_id} not found!")
+        abort(404, description=f"Unauthorized or {model.__name__.lower()} not found!") # Global handler catches the error
+
     return item
 
 def company_check(name):

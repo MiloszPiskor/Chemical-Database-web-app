@@ -152,7 +152,7 @@ class LineItem(db.Model):
         """Convert LineItem object to a JSON-serializable dictionary."""
         return {
             "id": self.id,
-            "product_name": self.product_name,
+            "product_id": self.product_id,
             "quantity": self.quantity,
             "price_per_unit": self.price_per_unit
         }

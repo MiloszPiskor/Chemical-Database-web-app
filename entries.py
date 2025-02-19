@@ -1,18 +1,9 @@
-from functools import wraps
-from flask import Flask, request, redirect, url_for, flash, jsonify, Blueprint, current_app
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.exc import SQLAlchemyError
-from werkzeug.exceptions import NotFound
+from flask import Flask, request, redirect, url_for, flash, jsonify, Blueprint, current_app, g
+from werkzeug.exceptions import HTTPException
 from models import User, Product, Company, Entry, LineItem, ProductCompany, db
 from validator_funcs import validate_json_payload, validate_document_nr, validate_transaction_type, validate_date_format, validate_line_items
 from EntryService import EntryService
-from users import get_or_create_user_from_token
-from utils import requires_auth
-from dotenv import load_dotenv
-import os
-import logging
-from datetime import datetime
-import re
+from utils import requires_auth, get_user_item_or_404
 
 entries_bp = Blueprint("entries", __name__)
 
@@ -40,32 +31,37 @@ def assign_entry_to_user(user_id, entry_id):
 #         current_app.logger.setLevel(logging.INFO)
 
 @entries_bp.route("/entries/<int:entry_id>")
+@requires_auth
 def get_entry(entry_id):
 
     try:
-        entry = db.get_or_404(Entry, entry_id)
-        print(entry.line_items) # Debug line
+        entry = get_user_item_or_404(Entry, entry_id)
+
+        print(f"Line items belonging to the enrty of ID {entry.id}: {entry.line_items}") # Debug line
         current_app.logger.info(f"Entry retrieved: {entry.id} by func: {get_entry.__name__}")
         return jsonify(entry=entry.to_dict()), 200
 
-    except NotFound:
-        current_app.logger.warning(f"Entry with ID: {entry_id} not found.")
-        return jsonify(error=f"Entry of ID: {entry_id} not found."), 404
+    except HTTPException as http_err:  # Let the Global 404 handler resolve the error
+        raise http_err
 
     except Exception as e:
         current_app.logger.error(f"Unexpected error in {get_entry.__name__}: {str(e)}")
         return jsonify(error="Internal server error"), 500
 
 @entries_bp.route("/entries")
+@requires_auth
 def get_entries():
 
     try:
-        user = User.query.get(1)
+        #Handling the User object from the JWT Token:
+        user = g.user
         entries = user.entries
+
         current_app.logger.info(
         f"Entries retrieved: {", ".join([str(entry.id) for entry in entries])} by func: {get_entries.__name__}") # May consider if it's not hindering the performance of the code
         print(f"Line items of each : {", ".join([str(entry.line_items) for entry in entries])}")
         return jsonify([entry.to_dict() for entry in entries]), 200
+
     except Exception as e:
         current_app.logger.error(f"Unexpected error in {get_entries.__name__}: {str(e)}")
         return jsonify(error="Internal server error"), 500
@@ -86,6 +82,7 @@ def delete_entry(entry_id):
     pass
 
 @entries_bp.route("/entries", methods=["POST"])
+@requires_auth
 @validate_json_payload
 @validate_document_nr
 @validate_transaction_type
