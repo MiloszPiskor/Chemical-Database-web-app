@@ -1,5 +1,5 @@
 from flask import Flask, request, redirect, url_for, flash, jsonify, Blueprint, current_app, g
-from werkzeug.exceptions import HTTPException
+from werkzeug.exceptions import HTTPException, NotFound
 from models import User, Product, Company, Entry, LineItem, ProductCompany, db
 from validator_funcs import validate_json_payload, validate_document_nr, validate_transaction_type, validate_date_format, validate_line_items
 from EntryService import EntryService
@@ -41,8 +41,10 @@ def get_entry(entry_id):
         current_app.logger.info(f"Entry retrieved: {entry.id} by func: {get_entry.__name__}")
         return jsonify(entry=entry.to_dict()), 200
 
-    except HTTPException as http_err:  # Let the Global 404 handler resolve the error
-        raise http_err
+
+    except NotFound as err:  # Return 404 Error if object not found
+
+        return jsonify(error=err.description), 404
 
     except Exception as e:
         current_app.logger.error(f"Unexpected error in {get_entry.__name__}: {str(e)}")
@@ -91,7 +93,8 @@ def delete_entry(entry_id):
 def add_entry(*args, **kwargs):
     """Handles entry validation and creation."""
     data = kwargs.get('data')
-    return EntryService.pre_entry_validation(data)
+    user = g.user
+    return EntryService.pre_entry_validation(data, user)
 
 
 

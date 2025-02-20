@@ -19,9 +19,10 @@ def get_company(company_id):
         current_app.logger.info(f"Company retrieved: {company.id} by func: {get_company.__name__}")
         return jsonify(company=company.to_dict()), 200
 
-    except HTTPException as http_err: # Let the Global 404 handler resolve the error
 
-        raise http_err
+    except NotFound as err:  # Return 404 Error if object not found
+
+        return jsonify(error=err.description), 404
 
     except Exception as e:
         current_app.logger.error(f"Unexpected error in {get_company.__name__}: {str(e)}")
@@ -65,9 +66,9 @@ def edit_company(company_id):
         current_app.logger.info(f"Correctly updated the Company: {edited_company.name}.")
         return jsonify(edited_company.to_dict()), 200
 
-    except HTTPException as http_err: # Let the Global 404 handler resolve the error
+    except NotFound as err:
 
-        raise http_err
+        return jsonify(error=err.description), 404
 
     except Exception as e:
         db.session.rollback()
@@ -86,9 +87,10 @@ def delete_company(company_id):
         current_app.logger.info(f"Company: {deleted_company.name} successfully deleted from the database.")
         return jsonify(success=f"Successfully deleted the company: {deleted_company.name}."), 200
 
-    except HTTPException as http_err: # Let the Global 404 handler resolve the error
 
-        raise http_err
+    except NotFound as err:
+
+        return jsonify(error=err.description), 404
 
     except Exception as e:
         db.session.rollback()
@@ -119,8 +121,8 @@ def add_company():
         # Committing the changes:
         db.session.add(new_company)
         db.session.commit()
-        current_app.logger.info(f"Successfully added a new company: {new_company.name} to the database.")
-        return jsonify(success=f"Successfully created a new company: {new_company.name} (ID: {new_company.id})!"), 200
+        current_app.logger.info(f"Successfully added a new company: {new_company.name} of ID: {new_company.id} to the database.")
+        return jsonify(success=f"Successfully created a new company: {new_company.name}!"), 200
 
     except Exception as e:
         current_app.logger.error(f"Unexpected error in {add_company.__name__}: {str(e)}")

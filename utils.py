@@ -3,6 +3,9 @@ from functools import wraps
 import requests
 from flask import jsonify, current_app, request, g, abort
 from datetime import datetime
+
+from werkzeug.exceptions import NotFound
+
 from extensions import db
 from models import Product, ProductCompany, Company
 from users import get_or_create_user_from_token
@@ -37,8 +40,10 @@ def get_user_item_or_404(model, item_id): # Instead of 3 for every model- worth 
     item = model.query.filter_by(id=item_id, user_id=g.user.id).first()
 
     if item is None:
+        error_message = f"Unauthorized or {model.__name__.lower()} not found!" # No Object ID in error message for security
         current_app.logger.error(f"Unauthorized or {model.__name__.lower()} with ID: {item_id} not found!")
-        abort(404, description=f"Unauthorized or {model.__name__.lower()} not found!") # Global handler catches the error
+        raise NotFound(description=error_message)
+        # abort(404, description=f"Unauthorized or {model.__name__.lower()} not found!") # Global handler catches the error ( CHANGED FOR EASIER TESTABILITY AND DIRECT CONTROL OVER ERROR HANDLING IN VIEWS-- MORE SCALABLE )
 
     return item
 
@@ -96,6 +101,16 @@ def calculate_product_company(product_company, transaction_type, quantity):
     elif transaction_type == "Supply":
         product_company.total_quantity_supplied += quantity
 
+def update_product_stock(product, transaction_type, quantity):
+    """Update the product's stock based on the transaction type and quantity."""
+    if transaction_type == "Purchase":
+        product.stock += quantity
+    elif transaction_type == "Supply":
+        if product.stock < quantity:
+            current_app.logger.error(f"Insufficient stock for product '{product.name}'. Current stock: {product.stock}, required: {quantity}")
+            raise ValueError(f"Insufficient stock for product '{product.name}'. Current stock: {product.stock}, required: {quantity}")
+        product.stock -= quantity
+    current_app.logger.info(f"Updated stock for product '{product.name}': {product.stock}")
 
 def validate_product_data(data, product_instance = None, is_update = False):
     """Validate product data before adding/updating a product."""

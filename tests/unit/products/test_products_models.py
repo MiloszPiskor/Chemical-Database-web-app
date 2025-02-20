@@ -34,11 +34,9 @@ class TestProductModels:
         """Unit test for get_product without using a real database."""
 
         # Prepare the mock products list
-        mock_products = []
-        for product_data in mock_product_data:
-            mock_product = MagicMock(spec=Product, **product_data)
-            mock_product.to_dict.return_value = product_data
-            mock_products.append(mock_product)
+        mock_products = [MagicMock(spec=Product, **product_data) for product_data in mock_product_data]
+        for mock_product in mock_products:
+            mock_product.to_dict.return_value = mock_product.__dict__
 
         # Mock the database queries
         mock_user_products.return_value = mock_products

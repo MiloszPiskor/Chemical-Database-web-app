@@ -32,8 +32,11 @@ def get_product(product_id):
         current_app.logger.info(f"Product retrieved: {product.id} by func: {get_product.__name__}")
         return jsonify(product=product.to_dict()), 200
 
-    except HTTPException as http_err:  # Let the Global 404 handler resolve the error
-        raise http_err
+
+
+    except NotFound as err:  # Return 404 Error if object not found
+
+        return jsonify(error=err.description), 404
 
     except Exception as e:
         current_app.logger.error(f"Unexpected error in {get_product.__name__}: {str(e)}")
@@ -75,8 +78,10 @@ def edit_product(product_id):
         current_app.logger.info(f"Correctly updated the Product: {edited_product.name}.")
         return jsonify(edited_product.to_dict()), 200
 
-    except HTTPException as http_err:  # Let the Global 404 handler resolve the error
-        raise http_err
+
+    except NotFound as err:
+
+        return jsonify(error=err.description), 404
 
     except Exception as e:
         db.session.rollback()
@@ -95,8 +100,10 @@ def delete_product(product_id):
         current_app.logger.info(f"Product ID {deleted_product.id} successfully deleted.")
         return jsonify(success=f"Successfully deleted the product: {deleted_product.name}."), 200
 
-    except HTTPException as http_err:  # Let the Global 404 handler resolve the error
-        raise http_err
+
+    except NotFound as err:  # Return 404 Error if object not found
+
+        return jsonify(error=err.description), 404
 
     except Exception as e:
         db.session.rollback()

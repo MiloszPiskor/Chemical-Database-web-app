@@ -2,12 +2,12 @@ from flask import jsonify, current_app
 from sqlalchemy.exc import SQLAlchemyError
 from extensions import db
 from models import Entry, Company, LineItem, Product, User
-from utils import get_or_create_product_company, calculate_product_company, single_line_item_validation
+from utils import get_or_create_product_company, calculate_product_company, single_line_item_validation, update_product_stock
 
 class EntryService:
 
     @staticmethod
-    def pre_entry_validation(data):
+    def pre_entry_validation(data, user):
         """Validation function handling appropriate DB queries."""
         try:
             # Ensure document_nr is unique
@@ -29,7 +29,7 @@ class EntryService:
             if isinstance(validated_line_items, tuple):  # Flask responses return (jsonify(), status_code)
                 return validated_line_items  # Directly return the error response
 
-            return EntryService.save_entry(data, validated_line_items, company_to_assign)
+            return EntryService.save_entry(data, validated_line_items, company_to_assign, user)
 
         except SQLAlchemyError as e:
             db.session.rollback()
@@ -37,7 +37,7 @@ class EntryService:
             return jsonify(error="An internal database error occurred. Please try again later."), 500
 
     @staticmethod
-    def save_entry(data, validated_line_items, company_to_assign):
+    def save_entry(data, validated_line_items, company_to_assign, user):
         """Handles database operations separately from validation."""
         try:
             # SETTING THE ATTRIBUTES FOR THE NEW ENTRY
@@ -47,7 +47,7 @@ class EntryService:
                     setattr(new_entry, key, value)
 
             # Assigning the Entry to the User and Company
-            new_entry.user = User.query.get(1)
+            new_entry.user = user
             new_entry.company = company_to_assign
             db.session.add(new_entry)
             current_app.logger.info(f"Adding new Entry: {new_entry.id} to the register.")
@@ -98,5 +98,16 @@ class EntryService:
                 transaction_type=new_entry.transaction_type,
                 quantity=line_item["quantity"]
             )
-
             current_app.logger.info(f"Updated ProductCompany balance for ID: {existing_connection.id}.")
+
+            # Handle Product's Stock
+            try:
+                update_product_stock(
+                    product=product_obj,
+                    transaction_type=new_entry.transaction_type,
+                    quantity=line_item["quantity"]
+                )
+                current_app.logger.info(f"Updated stock for product: {product_name}. Current stock: {product_obj.stock}")
+            except ValueError as e:
+                db.session.rollback()
+                return jsonify(error=str(e)), 400
