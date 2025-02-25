@@ -11,7 +11,7 @@ class EntryService:
         """Validation function handling appropriate DB queries."""
         try:
             # Ensure document_nr is unique
-            if db.session.query(Entry).filter_by(document_nr=data["document_nr"]).first():
+            if Entry.query.filter_by(document_nr=data.get("document_nr")).first():
                 current_app.logger.error(
                     f"Unable to post a new entry: entry tied with a transaction number: {data.get('document_nr')} already exists.")
                 return jsonify(error=f"The entry tied to a transaction: {data.get('document_nr')} already exists."), 400
@@ -35,6 +35,10 @@ class EntryService:
             db.session.rollback()
             current_app.logger.error(f"Database error while creating new entry: {str(e)}")
             return jsonify(error="An internal database error occurred. Please try again later."), 500
+
+        except Exception as e:
+            current_app.logger.error(f"Unexpected error in {EntryService.pre_entry_validation.__name__}: {str(e)}")
+            return jsonify(error="Internal server error"), 500
 
     @staticmethod
     def save_entry(data, validated_line_items, company_to_assign, user):
@@ -61,53 +65,71 @@ class EntryService:
             print(f"Successfully created a new Entry: {new_entry.id}!")
             return jsonify(message="Entry created successfully!", entry_id=new_entry.id), 201
 
+        except ValueError as e:
+            db.session.rollback()
+            return jsonify(error=f"Failed to save entry : {e}"), 400
+
         except SQLAlchemyError as e:
             db.session.rollback()
             current_app.logger.error(f"Error saving entry: {str(e)}")
             return jsonify(error="Failed to save entry."), 500
 
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Unexpected error in {EntryService.save_entry}: {str(e)}")
+            return jsonify(error="Internal server error."), 500
+
+
+
     @staticmethod
     def process_line_items(new_entry, validated_line_items, company_to_assign):
         """Handles processing and saving line items."""
-        validated_products = {
-            line_item["product"]: Product.query.filter_by(name=line_item["product"]).first()
-            for line_item in validated_line_items
-        }
+        try:
+            validated_products = {
+                line_item["product"]: Product.query.filter_by(name=line_item["product"]).first()
+                for line_item in validated_line_items
+            }
 
-        for line_item in validated_line_items:
-            product_name = line_item["product"]
-            product_obj = validated_products[product_name]
+            for line_item in validated_line_items:
+                product_name = line_item["product"]
+                product_obj = validated_products[product_name]
 
-            new_line_item = LineItem(
-                quantity=line_item["quantity"],
-                price_per_unit=line_item["price_per_unit"],
-                product=product_obj,
-                entry=new_entry
-            )
-            db.session.add(new_line_item)
-
-            # Prevent duplicate references in Product.line_items
-            if new_line_item not in product_obj.line_items:
-                product_obj.line_items.append(new_line_item)
-                print(f"Appended Line Items for product: {product_name}. Their current list: {product_obj.line_items}")
-
-            # Handle ProductCompany updates
-            existing_connection = get_or_create_product_company(product_obj.id, company_to_assign.id)
-            calculate_product_company(
-                product_company=existing_connection,
-                transaction_type=new_entry.transaction_type,
-                quantity=line_item["quantity"]
-            )
-            current_app.logger.info(f"Updated ProductCompany balance for ID: {existing_connection.id}.")
-
-            # Handle Product's Stock
-            try:
-                update_product_stock(
+                new_line_item = LineItem(
+                    quantity=line_item["quantity"],
+                    price_per_unit=line_item["price_per_unit"],
                     product=product_obj,
+                    entry=new_entry
+                )
+                db.session.add(new_line_item)
+
+                # Prevent duplicate references in Product.line_items
+                if new_line_item not in product_obj.line_items:
+                    product_obj.line_items.append(new_line_item)
+                    print(f"Appended Line Items for product: {product_name}. Their current list: {product_obj.line_items}")
+
+                # Handle ProductCompany updates
+                existing_connection = get_or_create_product_company(product_obj.id, company_to_assign.id)
+                calculate_product_company(
+                    product_company=existing_connection,
                     transaction_type=new_entry.transaction_type,
                     quantity=line_item["quantity"]
                 )
-                current_app.logger.info(f"Updated stock for product: {product_name}. Current stock: {product_obj.stock}")
-            except ValueError as e:
-                db.session.rollback()
-                return jsonify(error=str(e)), 400
+                current_app.logger.info(f"Updated ProductCompany balance for ID: {existing_connection.id}.")
+
+                # Handle Product's Stock
+                try:
+                    update_product_stock(
+                        product=product_obj,
+                        transaction_type=new_entry.transaction_type,
+                        quantity=line_item["quantity"]
+                    )
+                    current_app.logger.info(f"Updated stock for product: {product_name}. Current stock: {product_obj.stock}")
+                except ValueError as e:
+                    db.session.rollback()
+                    current_app.logger.error(f"Value Error in product stock update: {str(e)}")
+                    raise
+
+        except Exception as e:
+            current_app.logger.error(f"Error processing line items: {str(e)}")
+            db.session.rollback()
+            raise  # Re-raise to propagate to the outer try/except

@@ -103,9 +103,9 @@ def calculate_product_company(product_company, transaction_type, quantity):
 
 def update_product_stock(product, transaction_type, quantity):
     """Update the product's stock based on the transaction type and quantity."""
-    if transaction_type == "Purchase":
+    if transaction_type == "Supply":
         product.stock += quantity
-    elif transaction_type == "Supply":
+    elif transaction_type == "Purchase":
         if product.stock < quantity:
             current_app.logger.error(f"Insufficient stock for product '{product.name}'. Current stock: {product.stock}, required: {quantity}")
             raise ValueError(f"Insufficient stock for product '{product.name}'. Current stock: {product.stock}, required: {quantity}")

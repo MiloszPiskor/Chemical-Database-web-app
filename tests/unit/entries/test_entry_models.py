@@ -4,10 +4,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from flask import current_app, jsonify
+from sqlalchemy.exc import SQLAlchemyError
 from werkzeug.exceptions import NotFound
 
 # Add the directory containing 'models.py' to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
+
+# Mocking the validator decorators:
 patch('utils.requires_auth', lambda x: x).start()
 patch('validator_funcs.validate_json_payload', lambda x: x).start()
 patch('validator_funcs.validate_document_nr', lambda x: x).start()
@@ -17,7 +20,7 @@ patch('validator_funcs.validate_line_items', lambda x: x).start()
 
 from entries import get_entry, get_entries, add_entry
 from EntryService import EntryService
-from models import Entry, User, Company, Product
+from models import Entry, User, Company, Product, LineItem
 
 
 # Helper function to mock the g.user
@@ -209,6 +212,9 @@ class TestEntryModels:
         elif status_code == 500:
             assert "error" in response_data
 
+    # Now testing the chain of 3 functions inside EntryService.py that make up the 'add_entry(*args, **kwargs)' function,
+    # testing each one separately since these are unit tests:
+
     @pytest.mark.parametrize(
         "data, expected_status_code, mock_document_nr_return, mock_company_return, mock_line_items_return, expected_error_message",
         [
@@ -259,9 +265,9 @@ class TestEntryModels:
             ),
         ]
     )
-    @patch('EntryService.db.session.query')
-    @patch('EntryService.Company.query.filter_by')
-    @patch('utils.single_line_item_validation')
+    @patch('EntryService.Entry.query')
+    @patch('EntryService.Company.query')
+    @patch('EntryService.single_line_item_validation')
     @patch('EntryService.EntryService.save_entry')
     def test_pre_entry_validation(self, mock_save_entry,mock_line_item_validation, mock_company_query, mock_db_query, data,
                                   expected_status_code,
@@ -274,25 +280,239 @@ class TestEntryModels:
             else:
                 return (jsonify(error=mock_line_items_return), 400)
 
-        mock_db_query.return_value.filter_by.return_value.first.return_value = MagicMock() if mock_document_nr_return else None
+        user = mock_user()
+        # For Entry
+        mock_db_query.filter_by.return_value.first.return_value = (
+            MagicMock() if mock_document_nr_return else None
+        )
 
-        mock_company_query.filter_by.return_value.first.return_value = MagicMock() if mock_company_return else None
+        # For Company
+        mock_company_query.filter_by.return_value.first.return_value = (
+            MagicMock() if mock_company_return else None
+        )
 
+        # For helper validating Line Items
         mock_line_item_validation.side_effect = fake_line_item_validation
+
+        # For stimulating 500 Error
+        if expected_status_code == 500:
+            from sqlalchemy.exc import SQLAlchemyError
+            mock_save_entry.side_effect = SQLAlchemyError("An internal database error occurred. Please try again later.")
 
         with app.app_context():
             with app.test_request_context():
-                response = EntryService.pre_entry_validation( data = data, user = mock_user())
+                response = EntryService.pre_entry_validation( data = data, user = user)
 
         response_data = response[0].json
         status_code = response[1]
 
+        print(f"Data: {response_data}, s_code: {status_code}.")
+
         # Assertions
+
+        if expected_status_code == 200:
+            # IMPORTANT: NO ASSERTION FOR: status_code == expected_status_code, WHY?
+            # Because this function's return is another function: 'save_entry'. Therefore, a successful execution of this
+            # func does not have any response thus no s_code or message are asserted
+            mock_line_item_validation.assert_called_once()
+
+            # Assert that the Entry query was called with the correct document number.
+            mock_db_query.filter_by.assert_called_once_with(document_nr=data.get("document_nr"))
+            # Assert that the Company query was called with the correct company name.
+            mock_company_query.filter_by.assert_called_once_with(name=data.get("company"))
+
+            # Assert that save_entry was called exactly once with the proper parameters.
+            mock_save_entry.assert_called_once_with(data, mock_line_items_return,
+                                                    mock_company_query.filter_by.return_value.first.return_value,
+                                                    user)
+
+        elif status_code == 400:
+            assert status_code == expected_status_code
+            mock_db_query.filter_by.assert_called_once_with(document_nr=data.get("document_nr"))
+            if mock_document_nr_return:  # Document exists case
+                mock_company_query.filter_by.assert_not_called()
+                mock_line_item_validation.assert_not_called()
+            elif mock_company_return is None:  # Company not found
+                mock_company_query.filter_by.assert_called_once_with(name=data.get("company"))
+                mock_line_item_validation.assert_not_called()
+            else:  # Line item validation failure
+                mock_company_query.filter_by.assert_called_once_with(name=data.get("company"))
+                mock_line_item_validation.assert_called_once()
+
+        elif status_code == 500:
+            assert status_code == expected_status_code
+            assert expected_error_message == response_data["error"] == expected_error_message
+
+    @pytest.mark.parametrize(
+        "data, validated_line_items, company_to_assign, mock_flush_side_effect, mock_commit_side_effect, mock_process_side_effect, expected_status_code, expected_message",
+        [
+            # Scenario 1: Successful case
+            (
+                    {"document_nr": "WZ 2/01/2025", "date" : "2024-02-07", "transaction_type" : "Purchase"}, ["item1", "item2"], "TestCompany",
+                    None, None, None, 201, "Entry created successfully!"
+            ),
+            # Scenario 2: Failure at flush()
+            (
+                    {"document_nr": "WZ 2/01/2025", "date" : "2024-02-07", "transaction_type" : "Purchase"}, ["item3"], "TestCompany",
+                    SQLAlchemyError("Flush failed"), None, None, 500, "Failed to save entry."
+            ),
+            # Scenario 3: Failure at commit()
+            (
+                    {"document_nr": "WZ 2/01/2025", "date" : "2024-02-07", "transaction_type" : "Purchase"}, ["item4"], "TestCompany",
+                    None, SQLAlchemyError("Commit failed"), None, 500, "Failed to save entry."
+            ),
+            # Scenario 5: Failure in process_line_items()
+            (
+                    {"document_nr": "WZ 2/01/2025", "date" : "2024-02-07", "transaction_type" : "Purchase"}, ["item5"], "TestCompany",
+                    None, None, ValueError("Insufficient stock for product 'item5'. Current stock: 0, required: 1."), 400, "Failed to save entry : Insufficient stock for product 'item5'. Current stock: 0, required: 1."
+            ),
+            # Scenario 6: General SQLAlchemyError
+            (
+                    {"document_nr": "WZ 2/01/2025", "date" : "2024-02-07", "transaction_type" : "Purchase"}, ["item6"], "TestCompany",
+                    SQLAlchemyError("Unknown error"), SQLAlchemyError("Unknown error"), None, 500,
+                    "Failed to save entry."
+            ),
+        ]
+    )
+    @patch('EntryService.db.session.rollback')
+    @patch('EntryService.EntryService.process_line_items')
+    @patch('EntryService.db.session.commit')
+    @patch('EntryService.db.session.flush')
+    @patch('EntryService.db.session.add')
+    @patch('EntryService.Entry')
+    def test_save_entry(self, mock_entry, mock_add, mock_flush, mock_commit, mock_process, mock_rollback, data, validated_line_items, company_to_assign, mock_flush_side_effect, mock_commit_side_effect, mock_process_side_effect, expected_status_code, expected_message, app):
+
+        # Create a Fake Entry Instance
+        mock_entry_instance = MagicMock(spec=Entry)
+        mock_entry_instance.id = 1 # Manually setting the object's ID due to mocking the real DB
+        mock_entry.return_value = mock_entry_instance
+
+        user = mock_user()
+
+        # Apply Side Effects (Exceptions) to Mocks
+        mock_flush.side_effect = mock_flush_side_effect
+        mock_commit.side_effect = mock_commit_side_effect
+        mock_process.side_effect = mock_process_side_effect
+
+
+        with app.app_context():
+            with app.test_request_context():
+
+                response = EntryService.save_entry( data = data, validated_line_items= validated_line_items, company_to_assign = company_to_assign,
+                                         user = user)
+
+        response_data = response[0].json
+        status_code = response[1]
+
+        # Assertions:
         assert status_code == expected_status_code
-        # assert response.json == {"error": "Invalid line items"}
-        # mock_save_entry.assert_not_called()
-        # else:
-        #     mock_save_entry.assert_called_once()
+        actual_message = response_data.get("message") if expected_status_code == 201 else response_data.get("error")
+        assert actual_message == expected_message
+
+
+        if mock_flush_side_effect:
+            # Block 1: Simulate an error during the flush operation, causing a rollback.
+            # In this scenario, we expect the 'add' and 'flush' methods to be called once, indicating that the entry is added to the session and an attempt is made to synchronize it.
+            # However, since there's an issue during flushing, 'commit' should not be called, and 'rollback' is triggered to ensure database consistency.
+            # Additionally, 'process' should not be called, as it depends on successful database modifications, which are prevented here due to the error.
+            mock_add.assert_called_once()
+            mock_flush.assert_called_once()
+            mock_commit.assert_not_called()
+            mock_rollback.assert_called_once()
+            mock_process.assert_not_called()
+
+        elif mock_commit_side_effect:
+            # Block 2: Simulate a failure during the commit operation.
+            # In this case, 'add' and 'flush' are still triggered, as changes are attempted to be added to the session.
+            # However, the 'commit' fails due to an error, so 'commit' is not called.
+            # Since the commit fails, the 'rollback' method is triggered to undo any changes made during this transaction.
+            # No processing of line items occurs as the entry creation fails before reaching the processing stage.
+            mock_add.assert_called_once()
+            mock_flush.assert_called_once()
+            mock_commit.assert_called_once()
+            mock_rollback.assert_called_once()
+            mock_process.assert_called_once_with(mock_entry_instance, validated_line_items, company_to_assign)
+
+
+        elif mock_process_side_effect:
+            # Block 3: Simulate a scenario where the process side effect occurs, leading to no database changes.
+            # Here 'add' and 'flush' are triggered because the new Entry is attempted to be created before processing Line Items.
+            # However,'commit' is not triggered because no new entry is created eventually due to the process failure.
+            # The 'rollback' is therefore called to maintain consistency in case of any partial modifications.
+            mock_add.assert_called_once()
+            mock_flush.assert_called_once()
+            mock_commit.assert_not_called()
+            mock_rollback.assert_called_once()
+
+    @pytest.mark.parametrize(
+        "validated_line_items, expected_status_code, expected_error_message, mock_get_or_create_product_company_side_effect, mock_update_product_stock_side_effect, mock_db_add_side_effect",
+        [
+            # Scenario 1: Valid execution
+            ([{"product": "product1", "quantity": 10, "price_per_unit": 20}], 200, None, None, None, None),
+            # Scenario 2: Error while adding line item to the database
+            ([{"product": "product1", "quantity": 10, "price_per_unit": 20}], 500,
+             "Database error: Error occurred while adding line item to the database. Please check database constraints or connectivity.",
+             None, None, RuntimeError(
+                "Database error: Error occurred while adding line item to the database. Please check database constraints or connectivity.")),
+            # Scenario 3: Error while creating new ProductCompany model
+            ([{"product": "product1", "quantity": 10, "price_per_unit": 20}], 500,
+             "Database error: Error occurred while creating new ProductCompany model",
+             RuntimeError("Database error: Error occurred while creating new ProductCompany model"), None, None),
+            # Scenario 4: Insufficient stock for product
+            ([{"product": "product1", "quantity": 10, "price_per_unit": 20}], 500,
+             "Failed to save entry : Insufficient stock for product 'product1'. Current stock: 0, required: 10.",
+             None, ValueError(
+                "Failed to save entry : Insufficient stock for product 'product1'. Current stock: 0, required: 10."),
+             None),
+        ]
+    )
+    @patch("EntryService.get_or_create_product_company")
+    @patch("EntryService.update_product_stock")
+    @patch("EntryService.db.session.add")
+    @patch('EntryService.calculate_product_company')
+    @patch('EntryService.LineItem')
+    @patch('EntryService.Product.query')
+    def test_process_line_items(self, mock_product, mock_line_item, mock_calculate, mock_db_add, mock_update_product_stock,
+                                mock_get_or_create_product_company, validated_line_items, expected_status_code,
+                                expected_error_message, mock_get_or_create_product_company_side_effect,
+                                mock_update_product_stock_side_effect, mock_db_add_side_effect, app):
+
+        mock_entry = MagicMock(spec=Entry, id=1)  # Mock Entry Object
+        mock_company = MagicMock(spec=Company, id=1)  # Mock the Company object
+
+        # Mock the Line Item object
+        mock_line_item_instance = MagicMock(spec=LineItem, id=1)
+        mock_line_item.return_value = mock_line_item_instance
+
+        # Mock the Product object
+        mock_product.filter_by.return_value.first.return_value = MagicMock(spec=Product, id=1, name="product1")
+
+        # Apply side effects from parameterization
+        mock_get_or_create_product_company.side_effect = mock_get_or_create_product_company_side_effect
+        mock_update_product_stock.side_effect = mock_update_product_stock_side_effect
+        mock_db_add.side_effect = mock_db_add_side_effect
+
+        # Run the function within the app context
+        with app.app_context():
+            with app.test_request_context():
+                try:
+                    # Simulate calling the process_line_items function
+                    response = EntryService.process_line_items(new_entry=mock_entry, validated_line_items=validated_line_items,
+                                                    company_to_assign=mock_company)
+                except Exception as e:
+                    # Check the exception message and status code
+                    assert str(e) == expected_error_message
+                    assert expected_status_code == 500
+
+        # Assertions for valid scenario
+        if expected_status_code == 200:
+            mock_db_add.assert_called()
+            mock_update_product_stock.assert_called()
+            mock_get_or_create_product_company.assert_called()
+            mock_calculate.assert_called()
+
+
+
 
 
     # @pytest.mark.parametrize(
