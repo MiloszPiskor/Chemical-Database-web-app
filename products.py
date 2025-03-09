@@ -8,8 +8,6 @@ from models import User, Product, Company, LineItem, ProductCompany, db
 from utils import validate_product_data, requires_auth, get_user_item_or_404
 from werkzeug.exceptions import HTTPException
 from users import get_or_create_user_from_token
-
-from forms import ProductForm
 import random
 import os
 

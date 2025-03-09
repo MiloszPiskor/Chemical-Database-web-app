@@ -11,7 +11,6 @@ from models import Product, ProductCompany, Company
 from users import get_or_create_user_from_token
 import json
 from dotenv import load_dotenv
-from authlib.integrations.flask_client import OAuth
 import jwt
 from jwt.algorithms import RSAAlgorithm
 from requests.exceptions import RequestException
@@ -62,8 +61,10 @@ def single_line_item_validation(line_items_list):
             product_to_assign = Product.query.filter_by(name=line_item.get('product')).first()
             if not product_to_assign:
                 current_app.logger.warning(f"Product '{line_item.get('product')}' does not exist in the database. Cannot create LineItem.")
-                return jsonify(error=f"No such product: {line_item.get('product')} found in the database while trying to create new Entry"), 400
+                return jsonify(error=f"No such product: {line_item.get('product')} found in the database while trying to create new Entry."), 400
             validated_line_items.append(line_item)
+    else:
+        return jsonify(error="Empty list or incorrect data format for line items."), 400
         # One query to fetch all Product instances to avoid querying in the loop while creating LineItems, improving performance from N queries (per each product) to 1
     validated_products = {line_item["product"] : Product.query.filter_by(name=line_item["product"]).first() for line_item in validated_line_items}
     current_app.logger.info(f"Validated Line Items: {validated_products.keys()}, {validated_products.values()} ")

@@ -510,11 +510,6 @@ class TestEntryModels:
             mock_update_product_stock.assert_called()
             mock_get_or_create_product_company.assert_called()
             mock_calculate.assert_called()
-
-
-
-
-
     # @pytest.mark.parametrize(
     #     "mock_data, company_found, entry_exists, line_item_validation_result, product_stock, transaction_type, expected_status, expected_message",
     #     [

@@ -2,7 +2,7 @@ import os
 import sys
 from unittest.mock import MagicMock, patch
 from models import Product, Company
-from utils import update_product_stock, validate_product_data, product_check, validate_company_data
+from utils import update_product_stock, validate_product_data, product_check, validate_company_data, single_line_item_validation
 import pytest
 
 class TestUtilFunctions:
@@ -93,6 +93,50 @@ class TestUtilFunctions:
 
         # Call function and assert the expected return value
         assert validate_company_data(data, mock_company if is_update else None, is_update) == expected_return
+
+    @pytest.mark.parametrize(
+        "data, expected_return, product_found",
+        [
+            # Scenario 1: Successful validation
+            ([{"quantity" : 121, "price_per_unit" : 13, "product" : "Zep 45"},
+              {"quantity" : 48, "price_per_unit" : 13, "product" : "Big Orange"}], None, True),
+            # Scenario 2: Invalid Data (empty list)
+            ([], "Empty list or incorrect data format for line items.", False),
+            # Scenario 3: Invalid Data (incorrect format)
+            (({"quantity" : 121, "price_per_unit" : 13, "product" : "Zep 45"},
+              {"quantity" : 48, "price_per_unit" : 13, "product" : "Big Orange"}), "Empty list or incorrect data format for line items.", True),
+            # Scenario 4: Invalid Data (Product not found in the database)
+            ([{"quantity" : 121, "price_per_unit" : 13, "product" : "Zep 45"},
+              {"quantity" : 48, "price_per_unit" : 13, "product" : "Big Orange"}],
+             "No such product: Zep 45 found in the database while trying to create new Entry.", False)
+        ])
+    @patch('utils.Product.query')
+    def test_single_line_item_validation(self, mock_query, data, expected_return, product_found, app):
+        """Test of utility function single_line_item_validation."""
+        mock_product = MagicMock(spec = Product) if product_found else None
+        mock_query.filter_by.return_value.first.return_value = mock_product  # Simulate that a product was or wasn't found
+
+        with app.app_context():
+            with app.test_request_context():
+                result = single_line_item_validation(data)
+
+        # Assert for error cases
+        if expected_return:
+            assert result[0].get_json()['error'] == expected_return
+            assert result[1] == 400
+
+        else:
+            # Assert: In the case of a successful validation (no error)
+            # Ensure that the products were queried correctly for each line item
+            for line_item in data:
+                product_name = line_item.get('product')
+                mock_query.filter_by.assert_any_call(name=product_name)
+                # If there's no return value, we assume success, so we can verify that line items were validated correctly
+                assert len(result) == len(data)  # Validate that the line items are returned as expected
+
+    def test_get_or_create_product_company(self):
+
+        pass
 
 
 

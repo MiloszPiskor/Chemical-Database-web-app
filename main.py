@@ -4,7 +4,6 @@ from flask import Flask, request, redirect, url_for, flash, jsonify, session
 from flask_ckeditor import CKEditor
 from sqlalchemy import inspect
 from sqlalchemy.orm import DeclarativeBase
-from flask_bootstrap import Bootstrap5
 from models import User, Product, Company
 from companies import companies_bp
 from products import products_bp
@@ -14,8 +13,6 @@ from extensions import db
 from utils import requires_auth, get_auth0_public_key
 import os
 import json
-
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 
 from urllib.parse import quote_plus, urlencode
 from authlib.integrations.flask_client import OAuth
@@ -36,9 +33,6 @@ if not app.debug:
     handler = logging.FileHandler("app.log")
     handler.setLevel(logging.INFO)
     app.logger.addHandler(handler)
-
-ckeditor = CKEditor(app)
-bootstrap = Bootstrap5(app)
 
 app.secret_key = os.getenv('APP_SECRET_KEY')
 
