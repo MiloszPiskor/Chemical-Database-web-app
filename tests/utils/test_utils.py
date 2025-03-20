@@ -1,5 +1,3 @@
-import os
-import sys
 from unittest.mock import MagicMock, patch
 from models import Product, Company
 from utils import update_product_stock, validate_product_data, product_check, validate_company_data, single_line_item_validation

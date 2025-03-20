@@ -3,6 +3,7 @@ from functools import wraps
 from flask import jsonify, current_app, request
 from models import Entry, LineItem
 from datetime import datetime
+from utils import validate_numeric_fields
 
 def validate_json_payload(func):
     """Ensures request body contains only required fields."""
@@ -17,12 +18,12 @@ def validate_json_payload(func):
         if any(key not in Entry.REQUIRED_FIELDS for key in data.keys()):
             current_app.logger.error("Unable to post a new entry: invalid fields.")
             invalid_fields = [key for key in data if key not in Entry.REQUIRED_FIELDS]
-            return jsonify(error=f"Invalid field(s): {", ".join(invalid_fields)} while trying to create a new entry."), 400
+            return jsonify(error=f"Invalid field(s): {', '.join(invalid_fields)} while trying to create a new entry."), 400
         # If there are missing fields:
         missing_fields = [key for key in Entry.REQUIRED_FIELDS if key not in data.keys()]
         if missing_fields:
             current_app.logger.error("Unable to post a new entry: missing fields.")
-            return jsonify(error=f"Missing field(s): {", ".join(missing_fields)} while trying to create a new entry."), 400
+            return jsonify(error=f"Missing field(s): {', '.join(missing_fields)} while trying to create a new entry."), 400
 
         kwargs['data'] = data
         return func(*args, **kwargs)
@@ -137,6 +138,9 @@ def validate_line_items(func):
                     f"Invalid field(s): {', '.join(invalid_fields)} for the LineItem(s) while creating new Entry")
                 return jsonify(
                     error=f"Invalid field(s): {', '.join(invalid_fields)} while trying to create new LineItem."), 400
+            # Check if vales for 'price' and 'quantity' are numeric (float or int):
+            type_errors = validate_numeric_fields(line_item)
+            if type_errors: return type_errors
             # Check if the quantity and price fields are greater than 0:
             if float(quantity) <= 0 or float(current_price) <= 0:
                 current_app.logger.warning(

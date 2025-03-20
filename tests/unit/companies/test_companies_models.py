@@ -1,17 +1,16 @@
 import pytest
 import sys
 import os
-from unittest.mock import patch, MagicMock, Mock
+from unittest.mock import patch, MagicMock
 import logging
-from flask import has_request_context, request, jsonify, abort
-
-from werkzeug.exceptions import NotFound, HTTPException
+from flask import has_request_context, request
+from werkzeug.exceptions import NotFound
 
 # Add the directory containing 'models.py' to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 patch('utils.requires_auth', lambda x: x).start()
 # patch('utils.validate_company_data', lambda data, is_update, company_instance: None).start()
-from companies import User, Company, get_company, get_companies, edit_company, delete_company, add_company
+from companies import get_company, get_companies, edit_company, delete_company, add_company
 from models import Company, User
 
 class TestCompaniesModels:

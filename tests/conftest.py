@@ -1,5 +1,5 @@
 import pytest
-from flask import Flask, jsonify
+from flask import Flask
 import sys
 import os
 from unittest.mock import patch

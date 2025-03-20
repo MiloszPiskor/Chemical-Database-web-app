@@ -1,6 +1,7 @@
-from flask import Flask, request, redirect, url_for, flash, jsonify, Blueprint, current_app, g
-from werkzeug.exceptions import HTTPException, NotFound
-from models import User, Product, Company, Entry, LineItem, ProductCompany, db
+from flask import jsonify, Blueprint, current_app, g
+from werkzeug.exceptions import NotFound
+from extensions import db
+from models import User, Entry
 from validator_funcs import validate_json_payload, validate_document_nr, validate_transaction_type, validate_date_format, validate_line_items
 from EntryService import EntryService
 from utils import requires_auth, get_user_item_or_404
@@ -60,8 +61,8 @@ def get_entries():
         entries = user.entries
 
         current_app.logger.info(
-        f"Entries retrieved: {", ".join([str(entry.id) for entry in entries])} by func: {get_entries.__name__}") # May consider if it's not hindering the performance of the code
-        print(f"Line items of each : {", ".join([str(entry.line_items) for entry in entries])}")
+        f"Entries retrieved: {', '.join([str(entry.id) for entry in entries])} by func: {get_entries.__name__}") # May consider if it's not hindering the performance of the code
+        print(f"Line items of each : {', '.join([str(entry.line_items) for entry in entries])}")
         return jsonify([entry.to_dict() for entry in entries]), 200
 
     except Exception as e:

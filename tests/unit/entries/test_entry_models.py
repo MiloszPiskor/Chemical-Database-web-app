@@ -18,7 +18,7 @@ patch('validator_funcs.validate_transaction_type', lambda x: x).start()
 patch('validator_funcs.validate_date_format', lambda x: x).start()
 patch('validator_funcs.validate_line_items', lambda x: x).start()
 
-from entries import get_entry, get_entries, add_entry
+from entries import get_entry, get_entries
 from EntryService import EntryService
 from models import Entry, User, Company, Product, LineItem
 

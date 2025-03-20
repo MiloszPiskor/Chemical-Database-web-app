@@ -1,15 +1,8 @@
-from functools import wraps
-from sqlalchemy import text
-from flask import Flask, request, redirect, url_for, flash, jsonify, Blueprint, current_app, g
-from flask_ckeditor import CKEditor
-from datetime import date
-from werkzeug.exceptions import NotFound, BadRequest, InternalServerError
-from models import User, Product, Company, LineItem, ProductCompany, db
+from flask import request, jsonify, Blueprint, current_app, g
+from werkzeug.exceptions import NotFound
+from extensions import db
+from models import Product
 from utils import validate_product_data, requires_auth, get_user_item_or_404
-from werkzeug.exceptions import HTTPException
-from users import get_or_create_user_from_token
-import random
-import os
 
 products_bp = Blueprint("products", __name__)
 

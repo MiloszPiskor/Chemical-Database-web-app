@@ -1,12 +1,11 @@
-from flask_login import UserMixin
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import Integer,Float, String, Text, ForeignKey, inspect, Enum
-from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy.orm import relationship, Mapped, mapped_column, DeclarativeBase
+from sqlalchemy import Integer,Float, String, ForeignKey, Enum
 from extensions import db
 
-class User(db.Model,UserMixin):
+# Define the base class using DeclarativeBase
+Base = db.Model
+
+class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -19,9 +18,7 @@ class User(db.Model,UserMixin):
     products: Mapped[list["Product"]] = relationship("Product", back_populates="user")
     companies: Mapped[list["Company"]] = relationship("Company", back_populates="user")
 
-
-
-class Entry(db.Model):
+class Entry(Base):
     __tablename__ = "entries"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -54,7 +51,7 @@ class Entry(db.Model):
             "line_items": [line_item.to_dict() for line_item in self.line_items]  # Convert related objects to dicts
         }
 
-class Product(db.Model):
+class Product(Base):
     __tablename__ = "products"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -86,7 +83,7 @@ class Product(db.Model):
         """Returns all fields, including the non-editable ones."""
         return {column.name: getattr(self, column.name) for column in self.__table__.columns}
 
-class Company(db.Model):
+class Company(Base):
     __tablename__ = "companies"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -120,7 +117,9 @@ class Company(db.Model):
             "contact_number": self.contact_number,
         }
 
-class ProductCompany(db.Model):
+class ProductCompany(Base):
+    __tablename__ = "product_companies"
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     total_quantity_bought: Mapped[float] = mapped_column(Float, nullable=False)
     total_quantity_supplied: Mapped[float] = mapped_column(Float, nullable=False)
@@ -134,7 +133,9 @@ class ProductCompany(db.Model):
     company_id: Mapped[int] = mapped_column(Integer, ForeignKey("companies.id"))
     company: Mapped["Company"] = relationship("Company", back_populates="product_companies")
 
-class LineItem(db.Model):
+class LineItem(Base):
+    __tablename__ = "line_items"
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     quantity: Mapped[float] = mapped_column(Float, nullable=False)
     price_per_unit: Mapped[float] = mapped_column(Float, nullable=False)

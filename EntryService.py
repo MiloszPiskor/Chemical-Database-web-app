@@ -1,7 +1,7 @@
 from flask import jsonify, current_app
 from sqlalchemy.exc import SQLAlchemyError
 from extensions import db
-from models import Entry, Company, LineItem, Product, User
+from models import Entry, Company, LineItem, Product
 from utils import get_or_create_product_company, calculate_product_company, single_line_item_validation, update_product_stock
 
 class EntryService:

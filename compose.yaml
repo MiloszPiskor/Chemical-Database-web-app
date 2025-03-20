@@ -1,0 +1,57 @@
+services:
+  app:
+    build: .
+    env_file:
+      - .env
+    environment:
+      SQLALCHEMY_DATABASE_URI: "postgresql://chemical-db:password123@db:5432/chemical-db"
+      FLASK_APP: "main.py"
+    command: >
+      sh -c "flask db init || true;
+            apt update &&
+            apt install -y netcat-traditional &&
+            while ! nc -z db 5432; do sleep 1; done;
+            flask db upgrade;
+            python main.py"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "5002:5002"
+    healthcheck:
+      test: [ "CMD", "curl", "--fail", "http://localhost:5002/health", "||", "exit", "1" ]
+      interval: 30s
+      retries: 3
+      start_period: 10s
+      timeout: 10s
+    restart: on-failure
+
+  db:
+    image: bitnami/postgresql:latest
+    environment:
+      POSTGRESQL_USER: chemical-db
+      POSTGRESQL_PASSWORD: password123
+      POSTGRESQL_DATABASE: chemical-db
+    volumes:
+      - ./pg_data:/bitnami/postgresql
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U chemical-db" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: on-failure
+
+  pgadmin:
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "8080:80"
+    depends_on:
+      - db
+    restart: on-failure
+volumes:
+  pg_data:

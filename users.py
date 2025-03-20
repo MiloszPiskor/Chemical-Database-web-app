@@ -1,6 +1,6 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Blueprint, current_app
-from models import User, Product, Company, LineItem, ProductCompany, db
-import os
+from flask import jsonify, Blueprint, current_app
+from extensions import db
+from models import User
 from flask import request
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 

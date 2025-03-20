@@ -1,11 +1,9 @@
 import os
 from functools import wraps
 import requests
-from flask import jsonify, current_app, request, g, abort
+from flask import jsonify, current_app, request, g
 from datetime import datetime
-
 from werkzeug.exceptions import NotFound
-
 from extensions import db
 from models import Product, ProductCompany, Company
 from users import get_or_create_user_from_token
@@ -55,7 +53,8 @@ def company_check(name):
 def single_line_item_validation(line_items_list):
     """Validate LineItems separately before DB transactions"""
     validated_line_items = []
-        # Check if there is at least one LineItem tied to the new Entry:
+
+    # Check if there is at least one LineItem tied to the new Entry:
     if isinstance(line_items_list, list) and len(line_items_list) > 0:
         for line_item in line_items_list:
             product_to_assign = Product.query.filter_by(name=line_item.get('product')).first()
@@ -113,14 +112,40 @@ def update_product_stock(product, transaction_type, quantity):
         product.stock -= quantity
     current_app.logger.info(f"Updated stock for product '{product.name}': {product.stock}")
 
+def validate_data_type(data, expected_type=str):
+    """Check if all fields are of a correct type."""
+    type_errors = {key : f"Incorrect data type : expected 'string', got '{type(value).__name__}'."
+                   for key, value in data.items() if not isinstance(value, expected_type)
+                   }
+
+    if type_errors:
+        current_app.logger.error(f"Incorrect data type(s) for: {''.join([key for key, value in data.items() if not isinstance(value, expected_type)])}")
+        return type_errors
+
+def validate_numeric_fields(line_item):
+    """Check if price and quantity fields are numeric (both int and float)"""
+    not_numeric = {}
+    for key, value in line_item.items():
+        if key == "quantity" or key == "price_per_unit":
+            if value is None:
+                current_app.logger.error(
+                    f"Error while creating Entry: the value for: {key} is empty.")
+                not_numeric[key] = f"Value for '{key}' is missing."
+            else:
+                try:
+                    float(value)
+                except ValueError:
+                    current_app.logger.error(
+                        f"Error while creating Entry: not numeric value for {key} in line_items. Received: {value}")
+                    not_numeric[key] = f"Incorrect value: expected numeric value."
+
+    if not_numeric: return jsonify(error=not_numeric), 400
+
 def validate_product_data(data, product_instance = None, is_update = False):
     """Validate product data before adding/updating a product."""
 
-    # Check for invalid fields
-    invalid_fields = [key for key in data if key not in Product.EDITABLE_FIELDS]
-    if invalid_fields:
-        current_app.logger.warning(f"Invalid fields: {invalid_fields}") if is_update else current_app.logger.error("Unable to post a new product: invalid fields.")
-        return f"Invalid field(s): {', '.join(invalid_fields)}."
+    type_errors = validate_data_type(data)
+    if type_errors: return type_errors
 
     # Check for empty required fields
     empty_fields = [key for key in Product.EDITABLE_FIELDS if key not in data or (isinstance(data[key], str) and data[key].strip() == "")]
@@ -142,6 +167,9 @@ def validate_product_data(data, product_instance = None, is_update = False):
 def validate_company_data(data, company_instance = None, is_update = False):
     """Validate company data before adding/updating a company."""
 
+    type_errors = validate_data_type(data)
+    if type_errors: return type_errors
+
     # Check if all the fields are valid:
     invalid_fields = [key for key in data if key not in Company.EDITABLE_FIELDS]
     if invalid_fields:
@@ -162,9 +190,9 @@ def validate_company_data(data, company_instance = None, is_update = False):
                 f"Attempting to rename company '{company_instance.name}' to '{data['name']}'. Checking availability...")
 
         if company_check(data.get('name')):
-            current_app.logger.warning(f"Not unique name: {data["name"]} for editing a Company") if is_update \
+            current_app.logger.warning(f"Not unique name: {data['name']} for editing a Company") if is_update \
                 else current_app.logger.warning(f"Unable to post a new company: name {data['name']} already taken.")
-            return "This name is already occupied by another Company."
+            return "A company of this name already exists."
 
 def extra_user_info_call(token):
     """A function that fetches additional user information from Auth0."""

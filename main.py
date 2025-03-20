@@ -1,27 +1,40 @@
-from functools import wraps
 import logging
-from flask import Flask, request, redirect, url_for, flash, jsonify, session
-from flask_ckeditor import CKEditor
+from flask import Flask, request, url_for,jsonify, session
+from flask_migrate import Migrate
+from extensions import db
 from sqlalchemy import inspect
-from sqlalchemy.orm import DeclarativeBase
-from models import User, Product, Company
+from dotenv import load_dotenv
+import os
+import json
+from authlib.integrations.flask_client import OAuth
 from companies import companies_bp
 from products import products_bp
 from entries import entries_bp
-from dotenv import load_dotenv, find_dotenv
-from extensions import db
-from utils import requires_auth, get_auth0_public_key
-import os
-import json
-
-from urllib.parse import quote_plus, urlencode
-from authlib.integrations.flask_client import OAuth
+from utils import requires_auth
 
 # Loading the environment variables
 load_dotenv()
 
 # Initialising the app
 app = Flask(__name__)
+# Load database URI from environment variables
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI', "postgresql://userisme:password123@db:5432/chemical-db")
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Initialize Flask-Migrate
+migrate = Migrate(app, db)
+
+# Initialize the db with the app
+db.init_app(app)
+
+with app.app_context():
+    inspector = inspect(db.engine)
+    if not inspector.has_table("users"):
+        print("No database found, proceeding to instantiate the Model.")
+        db.create_all()
+    else:
+        print("The database exists, no need to initialize the Model.")
+
 app.config['TEMPLATES_AUTO_RELOAD'] = False
 # Registering the blueprints
 app.register_blueprint(companies_bp)
@@ -51,14 +64,6 @@ oauth.register(
     server_metadata_url=f'https://{os.getenv("AUTH0_DOMAIN")}/.well-known/openid-configuration'
 )
 
-# CREATE DATABASE
-class Base(DeclarativeBase):
-    pass
-# Load database URI from environment variables
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI', 'sqlite:///mydatabase.db')
-# Initialize the db with the app
-db.init_app(app)
-
 with app.app_context():
     if not inspect(db.engine).has_table("users"):
         app.logger.error("The 'user' table does not exist.")
@@ -67,14 +72,6 @@ with app.app_context():
 
 with app.app_context():
     app.logger.info(f"Registered routes: {[rule.rule for rule in app.url_map.iter_rules()]}")
-
-with app.app_context():
-    inspector = inspect(db.engine)
-    if not inspector.has_table("users"):
-        print("No database found, proceeding to instantiate the Model.")
-        db.create_all()
-    else:
-        print("The database exists, no need to initialize the Model.")
 
 #( CHANGED FOR EASIER TESTABILITY AND DIRECT CONTROL OVER ERROR HANDLING IN VIEWS-- MORE SCALABLE ) -> Now each view function raises 404 on it's own
 # 404 Error Handler:
@@ -115,6 +112,9 @@ def protected():
     print("User Payload:", request.user)
     return jsonify({"message": "You have access!", "user": request.user})
 
+@app.route('/health')
+def health_check():
+    return "OK", 200
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5002)
+    app.run(host="0.0.0.0", port=5002)

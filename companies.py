@@ -1,6 +1,7 @@
-from flask import Flask, request, redirect, url_for, flash, jsonify, Blueprint, current_app, g
-from werkzeug.exceptions import NotFound, HTTPException
-from models import User, Product, Company, LineItem, ProductCompany, db
+from flask import request, jsonify, Blueprint, current_app, g
+from werkzeug.exceptions import NotFound
+from extensions import db
+from models import Company
 from utils import validate_company_data, requires_auth, get_user_item_or_404
 
 companies_bp = Blueprint("companies", __name__)
@@ -37,7 +38,7 @@ def get_companies():
         print(f"User companies:{user.companies}")
 
         companies = user.companies
-        current_app.logger.info(f"Companies retrieved: {", ".join([str(company.id) for company in companies])}")
+        current_app.logger.info(f"Companies retrieved: {', '.join([str(company.id) for company in companies])}")
         return jsonify([company.to_dict() for company in companies]), 200
 
     except Exception as e:
@@ -122,7 +123,11 @@ def add_company():
         db.session.add(new_company)
         db.session.commit()
         current_app.logger.info(f"Successfully added a new company: {new_company.name} of ID: {new_company.id} to the database.")
-        return jsonify(success=f"Successfully created a new company: {new_company.name}!"), 200
+        return jsonify({
+            "success": True,
+            "message": f"Successfully created company: {new_company.name}",
+            "product_id": new_company.id
+        }), 201
 
     except Exception as e:
         current_app.logger.error(f"Unexpected error in {add_company.__name__}: {str(e)}")
