@@ -52,7 +52,7 @@ def validate_document_nr(func):
                 return False
 
             current_year = datetime.now().year
-            if not (2000 <= year <= current_year <= current_year + 10):  # A reasonable time-frame for realistic inputs
+            if not (2000 <= year <= current_year + 10):  # A reasonable time-frame for realistic inputs
                 return False
 
             return True
@@ -119,6 +119,10 @@ def validate_line_items(func):
     def wrapper_function(*args, **kwargs):
 
         data = kwargs.get('data')
+        
+        # Empty line_items edge case
+        if not data.get('line_items'):
+            return jsonify(error="At least one line item is required."), 400
 
         for line_item in data.get('line_items'):
 

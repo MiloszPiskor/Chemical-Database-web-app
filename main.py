@@ -1,5 +1,5 @@
 import logging
-from flask import Flask, request, url_for,jsonify, session
+from flask import Flask, request, url_for, jsonify, session, g
 from flask_migrate import Migrate
 from extensions import db
 from sqlalchemy import inspect
@@ -10,13 +10,17 @@ from authlib.integrations.flask_client import OAuth
 from companies import companies_bp
 from products import products_bp
 from entries import entries_bp
+from analytics import analytics_bp
 from utils import requires_auth
+from flask_cors import CORS
 
 # Loading the environment variables
 load_dotenv()
 
 # Initialising the app
 app = Flask(__name__)
+# Set up CORS to enable frontend calls to API
+CORS(app, origins=["http://localhost:3000", "http://localhost:30080"])  # Or "*"
 # Load database URI from environment variables
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI', "postgresql://userisme:password123@db:5432/chemical-db")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -28,18 +32,20 @@ migrate = Migrate(app, db)
 db.init_app(app)
 
 with app.app_context():
-    inspector = inspect(db.engine)
-    if not inspector.has_table("users"):
-        print("No database found, proceeding to instantiate the Model.")
-        db.create_all()
-    else:
-        print("The database exists, no need to initialize the Model.")
+    print(f"Connected to database: {db.engine.url}")
+    # inspector = inspect(db.engine)
+    # if not inspector.has_table("users"):
+    #     print("No database found, proceeding to instantiate the Model.")
+    #     db.create_all()
+    # else:
+    #     print("The database exists, no need to initialize the Model.")
 
 app.config['TEMPLATES_AUTO_RELOAD'] = False
 # Registering the blueprints
 app.register_blueprint(companies_bp)
 app.register_blueprint(products_bp)
 app.register_blueprint(entries_bp)
+app.register_blueprint(analytics_bp)
 
 # Logging setup
 if not app.debug:
@@ -80,28 +86,28 @@ with app.app_context():
 #     """Error handler for 404 - Resource Not Found"""
 #     return jsonify(error = error.description or "Resource not found"), 404
 
-@app.route("/login", methods=["GET"])
-def login():
-    auth0_login_url = oauth.auth0.authorize_redirect(
-        redirect_uri=url_for("callback", _external=True),
-        audience=os.getenv("AUTH0_AUDIENCE"),
-        scope="openid profile email",
-    ).location
-    print(url_for("callback", _external=True))
-    print("AUTH0_AUDIENCE:", os.getenv("AUTH0_AUDIENCE"))
+# @app.route("/login", methods=["GET"])
+# def login():
+#     auth0_login_url = oauth.auth0.authorize_redirect(
+#         redirect_uri=url_for("callback", _external=True),
+#         audience=os.getenv("AUTH0_AUDIENCE"),
+#         scope="openid profile email",
+#     ).location
+#     print(url_for("callback", _external=True))
+#     print("AUTH0_AUDIENCE:", os.getenv("AUTH0_AUDIENCE"))
 
-    return jsonify({"login_url": auth0_login_url}), 200
+#     return jsonify({"login_url": auth0_login_url}), 200
 
-@app.route("/callback", methods=["GET", "POST"])
-def callback():
-    token = oauth.auth0.authorize_access_token()
-    print("Token Audience:", token.get("aud", "MISSING_AUD"))
+# @app.route("/callback", methods=["GET", "POST"])
+# def callback():
+#     token = oauth.auth0.authorize_access_token()
+#     print("Token Audience:", token.get("aud", "MISSING_AUD"))
 
-    print("TOKEN RECEIVED:", json.dumps(token, indent=2))  # Debugging
-    print("AUTH0_AUDIENCE from ENV:", os.getenv("AUTH0_AUDIENCE"))
-    print("Token Audience:", token.get("aud", "MISSING_AUD"))
-    session["user"] = token
-    return jsonify({"access_token": token["access_token"]}), 200
+#     print("TOKEN RECEIVED:", json.dumps(token, indent=2))  # Debugging
+#     print("AUTH0_AUDIENCE from ENV:", os.getenv("AUTH0_AUDIENCE"))
+#     print("Token Audience:", token.get("aud", "MISSING_AUD"))
+#     session["user"] = token
+#     return jsonify({"access_token": token["access_token"]}), 200
 
 @app.route("/protected", methods=["GET"])
 @requires_auth
@@ -118,3 +124,19 @@ def health_check():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5002)
+
+@app.route("/user", methods=["GET"])
+@requires_auth
+def get_current_user():
+    """This function serves as the endpoint for frontend to fetch the info on the current user and display 
+    it on the page"""
+
+    if g.user: 
+        return jsonify({
+            "name": g.user.name,
+            "email": g.user.email,
+        })
+
+    else: 
+        return jsonify({'error': 'no user'
+        })

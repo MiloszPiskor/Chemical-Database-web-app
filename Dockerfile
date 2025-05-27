@@ -1,4 +1,4 @@
-FROM --platform=linux/arm64 python:3.9
+FROM python:3.9
 
 EXPOSE 5002
 WORKDIR /app

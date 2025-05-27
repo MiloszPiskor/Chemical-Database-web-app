@@ -1,10 +1,9 @@
-from flask import request, jsonify, Blueprint, current_app, g
+from products import products_bp
+from flask import request, jsonify, current_app, g
 from werkzeug.exceptions import NotFound
 from extensions import db
 from models import Product
-from utils import validate_product_data, requires_auth, get_user_item_or_404
-
-products_bp = Blueprint("products", __name__)
+from utils import validate_product_data, requires_auth, get_user_item_or_404, fetch_product_summary
 
 def product_check(name):
     """A function that checks if a product entered in the Product Form
@@ -20,6 +19,18 @@ def get_product(product_id):
     try:
         product = get_user_item_or_404(Product, product_id)
 
+        # Handling the AI generated summary (not on Product creation- limiting OpenAI API calls)
+        if not product.summary:
+
+            summary = fetch_product_summary(product)
+
+            if not summary:
+                product.summary = "Sorry, no product summary available at the moment :("
+            else:
+                product.summary = summary
+
+            db.session.commit()
+
         current_app.logger.info(f"Product retrieved: {product.id} by func: {get_product.__name__}")
         return jsonify(product=product.to_dict()), 200
 
@@ -33,14 +44,36 @@ def get_product(product_id):
         current_app.logger.error(f"Unexpected error in {get_product.__name__}: {str(e)}")
         return jsonify(error="Internal server error"), 500
 
+@products_bp.route("/products/<product_id>/regenerate-summary", methods=["PATCH"])
+@requires_auth
+def regenerate_product_summary(product_id):
+    try:
+        product = get_user_item_or_404(Product, product_id)
+
+        summary = fetch_product_summary(product)
+
+        if not summary:
+            product.summary = "Sorry, no product summary available at the moment :("
+        else:
+            product.summary = summary
+
+        db.session.commit()
+
+        return jsonify(message="Summary regenerated successfully.", summary=product.summary), 200
+
+    except NotFound as err:
+        return jsonify(error=err.description), 404
+
+    except Exception as e:
+        current_app.logger.error(f"Failed to regenerate summary: {str(e)}")
+        return jsonify(error="Internal server error"), 500
+
 @products_bp.route("/products")
 @requires_auth
 def get_products():
 
     try:
         user = g.user
-        print(f"User products:{user.products}")
-
         products = user.products
         current_app.logger.info(f"Products retrieved: {', '.join([str(product.id) for product in products])} by func: {get_product.__name__}")
         return jsonify([product.to_dict() for product in products]), 200
@@ -57,6 +90,8 @@ def edit_product(product_id):
         edited_product = get_user_item_or_404(Product, product_id)
 
         data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Missing or invalid JSON'}), 400
         # Validation of the json payload:
         validation_error = validate_product_data(data=data, is_update=True, product_instance= edited_product)
         if validation_error:
@@ -106,6 +141,10 @@ def delete_product(product_id):
 def add_product():
 
     data = request.get_json()
+    # Check if there is any data at all
+    if not data:
+        return jsonify({'error': 'Missing or invalid JSON'}), 400
+    print("Incoming product name:", request.json["name"])
     # Validation of the json payload:
     validation_error = validate_product_data(data = data, is_update=False)
     if validation_error:

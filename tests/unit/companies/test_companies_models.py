@@ -10,7 +10,7 @@ from werkzeug.exceptions import NotFound
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 patch('utils.requires_auth', lambda x: x).start()
 # patch('utils.validate_company_data', lambda data, is_update, company_instance: None).start()
-from companies import get_company, get_companies, edit_company, delete_company, add_company
+from companies.routes import get_company, get_companies, edit_company, delete_company, add_company
 from models import Company, User
 
 class TestCompaniesModels:
@@ -28,7 +28,7 @@ class TestCompaniesModels:
         ])
     @patch('companies.get_user_item_or_404')
     def test_get_company(self, mock_get_or_404, mock_company_data, response_keyword, expected_status_code, app):
-        """Test the get_company function in companies.py"""
+        """Test the get_company function in routes.py"""
 
         if mock_company_data is not None:
             mock_company = MagicMock(spec_set=Company, **mock_company_data)
@@ -70,7 +70,7 @@ class TestCompaniesModels:
         ])
     @patch('companies.g')
     def test_get_companies(self, mock_g, mock_company_data, expected_company_count, expected_status_code,  app):
-        """Test the get_companies function in companies.py properly isolated to only
+        """Test the get_companies function in routes.py properly isolated to only
         reflect a business logic: without a real db or http calls"""
 
         # Prepare the mock companies list
@@ -137,7 +137,7 @@ class TestCompaniesModels:
     @patch('companies.get_user_item_or_404')
     @patch('companies.db.session.commit')
     def test_edit_company(self, mock_commit, mock_get_user_item_or_404, mock_validate_company_data, mock_company_data, mock_request_data, validation_return, expected_status_code, expected_response, app):
-        """Test the edit_company function in companies.py"""
+        """Test the edit_company function in routes.py"""
         # Mock the company object returned by the helper
 
         if mock_company_data is not None:

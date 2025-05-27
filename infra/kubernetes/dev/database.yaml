@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: database-statefulset
+  labels:
+    app: postgresdb
+spec:
+  serviceName: database-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgresdb
+  template:
+    metadata:
+      labels:
+        app: postgresdb
+    spec:
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: local-pvc
+      containers:
+        - name: postgresdb
+          image: bitnami/postgresql:latest
+          imagePullPolicy: Always
+          volumeMounts:
+            - mountPath: /bitnami/postgresql
+              name: postgres-data
+          envFrom:
+            - configMapRef:
+                name: postgres-secret
+# MAJOR: BEING AWARE OF THE SECURITY RISKS OF DISPLAYING THE ENV VARIABLES IN A K8 MANIFEST- IT SHOULD NEVER BE DONE! 
+# THIS IS ME (AUTHOR) LEARNING TO DEPLOY ON K8! MY SETUP WAS FAILING (UNKNOWINGLY WHY) WHEN USING THE database-secret.yaml 
+# CONFIG FILE :( ! THUS IT HAS BEEN SWITCHED TO ConfigMap, WHICH IS A SUBSTITUTE, BUT ALSO NOT SAFE FOR PROD. 
+#            - name: POSTGRESQL_USER
+#              value: postgresdb
+##              valueFrom:
+##                secretKeyRef:
+##                  name: postgres-db-secret
+##                  key: POSTGRESQL_USER
+#            - name: POSTGRESQL_PASSWORD
+#              value: password123
+##              valueFrom:
+##                secretKeyRef:
+##                  name: postgres-db-secret
+##                  key: POSTGRESQL_PASSWORD
+#            - name: POSTGRESQL_DATABASE
+#              value: chemicaldb
+#              valueFrom:
+#                secretKeyRef:
+#                  name: postgres-db-secret
+#                  key: POSTGRESQL_DATABASE
+          ports:
+            - containerPort: 5432
+#  volumeClaimTemplates:
+#  - metadata:
+#      name: postgres-data
+#    spec:
+#      accessModes: ["ReadWriteOnce"]
+#      storageClassName: hostpath
+#      resources:
+#        requests:
+#          storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: database-service
+  labels:
+    app: postgresdb
+spec:
+  ports:
+  - port: 5432
+    protocol: TCP
+  selector:
+    app: postgresdb

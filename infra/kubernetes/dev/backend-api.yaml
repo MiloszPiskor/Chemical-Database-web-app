@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-api-deployment
+  labels:
+    app: backend-api
+    version: '1.0'
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend-api
+  template:
+    metadata:
+      labels:
+        app: backend-api
+    spec:
+      containers:
+        - name: backend-api
+          image: localhost:5001/chemical-db:latest
+          imagePullPolicy: Never
+          command:
+            - sh
+            - -c
+            - |
+              flask db init || true;
+            
+              until flask db upgrade; do sleep 1; done;
+              python main.py
+          ports:
+            - containerPort: 5002
+              name: backend-port
+          env:
+            - name: SQLALCHEMY_DATABASE_URI
+              value: postgresql://postgresdb:password123@database-service:5432/chemicaldb
+#               valueFrom:
+#                 secretKeyRef:
+#                   name: postgres-db-secret
+#                   key: SQLALCHEMY_DATABASE_URI
+            - name: FLASK_APP
+              value: "main.py"
+# ---------------------------------------------------
+# FOR DEVELOPMENT OR TESTING (EXPOSE BACKEND VIA NODEPORT)
+# ---------------------------------------------------
+# Comment this out if you're running a frontend inside the cluster:
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+  labels:
+    app: api-service
+spec:
+  type: NodePort
+  ports:
+    - targetPort: backend-port
+      port: 80
+      nodePort: 31080
+      protocol: TCP
+  selector:
+    app: backend-api
+# ---------------------------------------------------
+# FOR THE FULL CLUSTER SETUP (ACCESS BACKEND INTERNALLY FROM FRONTEND)
+# ---------------------------------------------------
+# ---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: api-service
+#   labels:
+#     app: api-service
+# spec:
+#   type: ClusterIP  # Default, therefore optional
+#   ports:
+#     - port: 80
+#       targetPort: backend-port
+#       protocol: TCP
+#   selector:
+#     app: backend-api

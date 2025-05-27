@@ -47,6 +47,7 @@ class Entry(Base):
             "document_nr": self.document_nr,
             "transaction_type": self.transaction_type,
             "company_id": self.company_id,
+            "company": self.company.name if self.company else None,
             "user_id": self.user_id,
             "line_items": [line_item.to_dict() for line_item in self.line_items]  # Convert related objects to dicts
         }
@@ -59,6 +60,7 @@ class Product(Base):
     stock: Mapped[float] = mapped_column(Float, nullable=False)
     customs_code: Mapped[str] = mapped_column(String(250), nullable=False)
     img_url: Mapped[str] = mapped_column(String(250), nullable=False)
+    summary: Mapped[str] = mapped_column(String(1000), nullable=True)
     EDITABLE_FIELDS = ["name", "customs_code", "img_url"]
 
     # Relationship of Many to Many with Company through ProductCompany Model, here the Parent for ProductCompany
@@ -154,6 +156,7 @@ class LineItem(Base):
         return {
             "id": self.id,
             "product_id": self.product_id,
+            "product" : self.product.name if self.product else None,
             "quantity": self.quantity,
             "price_per_unit": self.price_per_unit
         }

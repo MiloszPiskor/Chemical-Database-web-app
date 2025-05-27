@@ -11,7 +11,7 @@ from werkzeug.exceptions import NotFound
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
 
 from models import Product, User
-from products import get_product, get_products, delete_product, edit_product, add_product
+from products.routes import get_product, get_products, delete_product, edit_product, add_product
 
 class TestProductModels:
 

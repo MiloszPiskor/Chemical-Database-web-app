@@ -1,35 +1,11 @@
-from flask import jsonify, Blueprint, current_app, g
+from entries import entries_bp
+from flask import jsonify, current_app, g
 from werkzeug.exceptions import NotFound
 from extensions import db
 from models import User, Entry
 from validator_funcs import validate_json_payload, validate_document_nr, validate_transaction_type, validate_date_format, validate_line_items
-from EntryService import EntryService
+from .EntryService import EntryService
 from utils import requires_auth, get_user_item_or_404
-
-entries_bp = Blueprint("entries", __name__)
-
-def assign_entry_to_user(user_id, entry_id):
-    try:
-        entry = Entry.query.get(entry_id)
-        user = User.query.get(user_id)
-
-        if not entry:
-            return jsonify(error="Entry not found"), 404
-        if not user:
-            return jsonify(error="User not found"), 404
-
-        entry.user = user  # Assign the user using SQLAlchemy ORM
-        db.session.commit()
-
-        return jsonify(success=f"Entry {entry_id} assigned to user {user_id}"), 200
-
-    except Exception as e:
-        db.session.rollback()
-        return jsonify(error=str(e)), 500
-
-# with app.app_context():
-#     if not current_app.debug:  # Ensure logging in production mode
-#         current_app.logger.setLevel(logging.INFO)
 
 @entries_bp.route("/entries/<int:entry_id>")
 @requires_auth

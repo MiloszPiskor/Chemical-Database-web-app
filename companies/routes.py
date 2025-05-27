@@ -1,14 +1,9 @@
-from flask import request, jsonify, Blueprint, current_app, g
+from companies import companies_bp
+from flask import request, jsonify, current_app, g
 from werkzeug.exceptions import NotFound
 from extensions import db
 from models import Company
 from utils import validate_company_data, requires_auth, get_user_item_or_404
-
-companies_bp = Blueprint("companies", __name__)
-
-# with app.app_context():
-#     if not current_app.debug:  # Ensure logging in production mode
-#         current_app.logger.setLevel(logging.INFO)
 
 @companies_bp.route("/companies/<int:company_id>")
 @requires_auth

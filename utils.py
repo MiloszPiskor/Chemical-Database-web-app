@@ -10,31 +10,77 @@ from users import get_or_create_user_from_token
 import json
 from dotenv import load_dotenv
 import jwt
+from jose import jwk
+from jose.utils import base64url_decode
 from jwt.algorithms import RSAAlgorithm
 from requests.exceptions import RequestException
+import openai
 
 # Loading the environment variables
 load_dotenv()
 
-def get_auth0_public_key():
-    """Fetches Auth0's public key to verify JWTs (only once)."""
-    url = f"https://{os.getenv('AUTH0_DOMAIN')}/.well-known/jwks.json"
-    response = requests.get(url)
-    jwks = response.json()["keys"]
-    return {key["kid"]: RSAAlgorithm.from_jwk(json.dumps(key)) for key in jwks}  # Convert JWKS to a public key
+JWKS_CACHE = {}
 
-AUTH0_PUBLIC_KEYS = get_auth0_public_key()
+def get_public_key_from_jwks(token):
+    """Fetch and return the matching public key from the JWKS endpoint."""
+    try:
+        unverified_header = jwt.get_unverified_header(token)
+        # Check algorithm
+        alg = unverified_header.get("alg")
+        if alg != "RS256":
+            current_app.logger.error(f"Unexpected signing algorithm: {alg}")
+            return jsonify({"error": "Invalid token algorithm"}), 401
+        kid = unverified_header.get('kid')
+
+        if not kid:
+            raise Exception("No 'kid' found in token header")
+
+        # If the key has been caught already, return it
+        if kid in JWKS_CACHE:
+            return JWKS_CACHE[kid]
+
+        # Fetch keys from Okta's JWKS endpoint
+        jwks_url = f"https://{os.getenv('OKTA_DOMAIN')}/oauth2/default/v1/keys"
+        response = requests.get(jwks_url)
+        response.raise_for_status()
+
+        jwks = response.json()
+        for key in jwks['keys']:
+            if key['kid'] == kid:
+                JWKS_CACHE[kid] = key
+                return key
+
+        raise Exception("Matching 'kid' not found in JWKS")
+
+    except Exception as e:
+        current_app.logger.error(f"Error retrieving JWKS: {str(e)}")
+        return None
+
+# def get_auth0_public_key():
+#     """Fetches Auth0's public key to verify JWTs (only once)."""
+#     url = f"https://{os.getenv('AUTH0_DOMAIN')}/.well-known/jwks.json"
+#     response = requests.get(url)
+#     jwks = response.json()["keys"]
+#     return {key["kid"]: RSAAlgorithm.from_jwk(json.dumps(key)) for key in jwks}  # Convert JWKS to a public key
+
+# AUTH0_PUBLIC_KEYS = get_auth0_public_key()
 
 def product_check(name):
     """A function that checks if a product entered in the Product Form
-    already exists in a database, if it does it redirects the User to the
-    specific Product page"""
-    check_for_product = Product.query.filter_by(name=name).first()
+    already exists in a database, and for the current user."""
+    # name = name.strip().capitalize()
+    user_id = g.user.id
+    check_for_product = Product.query.filter_by(name=name, user_id=user_id).first()
     return check_for_product
 
 def get_user_item_or_404(model, item_id): # Instead of 3 for every model- worth considering
     """Retrieve an item (Product, Company, etc.) that belongs to the logged-in user. Return a 404 error if unauthorized."""
+    if not g.user:
+        current_app.logger.error("User not authenticated")
+        raise NotFound(description="User not authenticated.")
+
     item = model.query.filter_by(id=item_id, user_id=g.user.id).first()
+    current_app.logger.debug(f"Checking item {item_id} for user {g.user}")
 
     if item is None:
         error_message = f"Unauthorized or {model.__name__.lower()} not found!" # No Object ID in error message for security
@@ -46,8 +92,9 @@ def get_user_item_or_404(model, item_id): # Instead of 3 for every model- worth 
 
 def company_check(name):
     """A function that checks if a company entered in the Company Form
-    already exists in a database."""
-    check_for_company = Company.query.filter_by(name=name).first()
+    already exists in a database, and for the current user.."""
+    user_id = g.user.id
+    check_for_company = Company.query.filter_by(name=name, user_id=user_id).first()
     return check_for_company
 
 def single_line_item_validation(line_items_list):
@@ -70,6 +117,46 @@ def single_line_item_validation(line_items_list):
 
     return validated_line_items
 
+def fetch_product_summary(product):
+
+    openai.api_key = os.getenv("OPENAI_API_KEY")
+
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant providing short summaries of industrial chemical products.",
+                },
+                {
+                    "role": "user",
+                    "content": f"""Summarize the industrial chemical product: {product.name} in 2-3 sentences for a product info section.
+                    Focus on use cases and safety. You may greet website users first, as their assistant providing information
+                    about this product."""
+                }
+            ],
+            temperature=0.7,
+        )
+
+        return response["choices"][0]["message"]["content"]
+    
+    except openai.error.RateLimitError as e:
+        current_app.logger.error(f"Rate limit exceeded: {str(e)}")
+        return None
+    except openai.error.InvalidRequestError as e:
+        current_app.logger.error(f"Invalid request: {str(e)}")
+        return None
+    except openai.error.APIConnectionError as e:
+        current_app.logger.error(f"API connection error: {str(e)}")
+        return None
+    except openai.error.OpenAIError as e:
+        current_app.logger.error(f"OpenAI API error: {str(e)}")
+        return None
+    except Exception as e:
+        current_app.logger.error(f"Failed to fetch GPT summary: {str(e)}")
+        return None
+    
 def get_or_create_product_company(product_id, company_id):
 
     try:
@@ -96,6 +183,15 @@ def get_or_create_product_company(product_id, company_id):
         raise RuntimeError(f"Database error: {str(e)}")
 
 def calculate_product_company(product_company, transaction_type, quantity):
+    """
+    Updates the quantity for the given ProductCompany based on the transaction type (Purchase or Supply).
+    Also updates the last transaction date to the current date whenever the quantities are modified.
+    """
+    # Get the current date in ISO format
+    current_date = datetime.today().strftime("%Y-%m-%d")
+
+    # Update the total quantities and the last transaction date
+    product_company.last_transaction_date = current_date
     if transaction_type == "Purchase":
         product_company.total_quantity_bought += quantity
     elif transaction_type == "Supply":
@@ -160,7 +256,7 @@ def validate_product_data(data, product_instance = None, is_update = False):
         if not is_update or (is_update and new_name != product_instance.name):
             if product_check(new_name):
                 current_app.logger.warning(f"Product with name '{new_name}' already exists.")
-                return "A product of this name already exists."
+                return "A product of this name already exists for this account."
 
     return None  # Validation passed
 
@@ -192,12 +288,12 @@ def validate_company_data(data, company_instance = None, is_update = False):
         if company_check(data.get('name')):
             current_app.logger.warning(f"Not unique name: {data['name']} for editing a Company") if is_update \
                 else current_app.logger.warning(f"Unable to post a new company: name {data['name']} already taken.")
-            return "A company of this name already exists."
+            return "A company of this name already exists for this account."
 
 def extra_user_info_call(token):
     """A function that fetches additional user information from Auth0."""
     try:
-        user_info_url = f"https://{os.getenv('AUTH0_DOMAIN')}/userinfo"
+        user_info_url = f"https://{os.getenv('OKTA_DOMAIN')}/oauth2/default/v1/userinfo"
         user_info_response = requests.get(user_info_url, headers={
             'Authorization': f'Bearer {token}'
         })
@@ -236,16 +332,34 @@ def requires_auth(f):
         try:
             unverified_header = jwt.get_unverified_header(token)
             key_id = unverified_header.get("kid")
-            if key_id not in AUTH0_PUBLIC_KEYS:
-                return jsonify({"error": "Invalid key ID"}), 401
 
-            payload = jwt.decode(
-                token,
-                AUTH0_PUBLIC_KEYS[key_id],
-                algorithms=["RS256"],
-                audience=os.getenv("AUTH0_AUDIENCE"),
-                issuer=f"https://{os.getenv('AUTH0_DOMAIN')}/",
-            )
+            public_key_data = get_public_key_from_jwks(token)
+            if not public_key_data:
+                return jsonify({"error": "Public key not found"}), 401
+
+            public_key = jwk.construct(public_key_data)
+
+            pem_key = public_key.to_pem().decode("utf-8")
+
+            # Debug line 
+            current_app.logger.info(f"Decoding token with:\n"
+                        f"audience={os.getenv('OKTA_AUDIENCE')}\n"
+                        f"issuer=https://{os.getenv('OKTA_DOMAIN')}/oauth2/default\n"
+                        f"key_id={key_id}")
+
+            try: 
+                payload = jwt.decode(
+                    token,
+                    pem_key,
+                    algorithms=["RS256"],
+                    audience=os.getenv("OKTA_AUDIENCE"),
+                    issuer=f"https://{os.getenv('OKTA_DOMAIN')}/oauth2/default",
+                )
+            except jwt.ExpiredSignatureError as e:
+                return jsonify({'error': 'Token expired'}), 401
+            except jwt.InvalidTokenError as e:
+                return jsonify({'error': 'Invalid token'}), 401
+
             # Fetch additional user info:
             user_info = extra_user_info_call(token = token)
             payload.update(user_info)  # Merge the user info into the payload
@@ -265,6 +379,8 @@ def requires_auth(f):
 
         return f(*args, **kwargs)
     return decorated
+
+
 
 
 

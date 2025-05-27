@@ -28,7 +28,7 @@ def get_or_create_user_from_token():
         try:
             user = User(
                 auth0_sub=user_sub,
-                name=decoded_token.get('nickname'),
+                name=decoded_token.get('name'),
                 email=decoded_token.get('email')
             )
             db.session.add(user)

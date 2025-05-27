@@ -1,0 +1,48 @@
+{
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "family": "Database-Python-web-app",
+    "containerDefinitions": [
+        {
+            "name": "Backend",
+            "image": "354918409306.dkr.ecr.eu-central-1.amazonaws.com/database-webapp:latest",
+            "essential": true,
+            "healthCheck": {
+                "command" : [ "CMD-SHELL", "curl -f http://localhost/health || exit 1" ],
+                "interval" : 30,
+                "timeout" : 5,
+                "retries": 3,
+                "startPeriod" : 60
+            },
+            "environment": [
+                {
+                    "name": "SQLALCHEMY_DATABASE_URI",
+                    "value": "postgresql://postgres:ypC4sbSNj2w0f4T8YW7h@db.c9o6ae2y8y23.eu-central-1.rds.amazonaws.com:5432/chemical_db"
+                }
+
+            ],
+            "portMappings" : [
+                {
+                    "containerPort" : 5002,
+                    "hostPort" : 5002,
+                    "protocol" :"tcp"
+                }
+            ],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/Database-Python-web-app",
+                    "awslogs-region": "eu-central-1",
+                    "awslogs-stream-prefix": "backend"
+                }
+            }
+        }
+    ],
+    "volumes": [],
+    "networkMode": "awsvpc",
+    "memory": "3 GB",
+    "cpu": "1 vCPU",
+    "executionRoleArn": "arn:aws:iam::354918409306:role/ecsTaskExecutionRole",
+    "taskRoleArn": "arn:aws:iam::354918409306:role/ecsTaskExecutionRole"
+}

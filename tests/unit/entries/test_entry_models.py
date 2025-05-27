@@ -18,8 +18,8 @@ patch('validator_funcs.validate_transaction_type', lambda x: x).start()
 patch('validator_funcs.validate_date_format', lambda x: x).start()
 patch('validator_funcs.validate_line_items', lambda x: x).start()
 
-from entries import get_entry, get_entries
-from EntryService import EntryService
+from entries.routes import get_entry, get_entries
+from entries.EntryService import EntryService
 from models import Entry, User, Company, Product, LineItem
 
 
@@ -70,7 +70,7 @@ class TestEntryModels:
     )
     @patch('entries.get_user_item_or_404')
     def test_get_entry(self, mock_get_or_404, mock_entry_data, response_keyword, expected_status_code, app):
-        """Test the get_entry function in entries.py properly isolated to only
+        """Test the get_entry function in routes.py properly isolated to only
         reflect a business logic: without a real db or http calls"""
 
         if mock_entry_data is not None:
@@ -162,7 +162,7 @@ class TestEntryModels:
     )
     @patch('entries.g')
     def test_get_entries(self, mock_g, mock_entry_data, response_keyword, expected_status_code, expected_entry_count, app):
-        """Test of get_entries function in entries.py"""
+        """Test of get_entries function in routes.py"""
 
         # noinspection PyUnusedFunction
         def dynamic_to_dict(entry, i):
