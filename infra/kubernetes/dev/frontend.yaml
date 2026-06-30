@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: react-frontend-deployment
+  labels:
+    app: react-frontend
+    version: '1.0'
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: react-frontend
+  template:
+    metadata:
+      labels:
+        app: react-frontend
+    spec:
+      containers:
+        - name: react-frontend
+          image: localhost:5001/react-frontend:latest
+          imagePullPolicy: Never
+          ports:
+          - containerPort: 80
+            name: frontend-port
+          # Injecting this env. var. at runtime overwriting this variable of that key on the local .env file. 
+          # Facilitates correct 'apiFetch' function (fetching data from backend api) functioning, as it is set 
+          # by default to fetch the data (dev config) from localhost:<backend-port> through docker compose.
+          # However, this won't work, because Vite needs envs at build time, and changing them at runtime won't
+          # really affect it. 
+
+          # For K8 then, make sure to build the image with VITE_DATABASE_URL set to http://api-service at .env
+          
+          # env:
+          #   - name: VITE_DATABASE_URL
+          #     value: http://api-service # http://api-service:80 optionally
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+  labels:
+    app: frontend-service
+spec:
+  type: NodePort
+  ports:
+    - targetPort: frontend-port
+      port: 80
+      nodePort: 30080
+  selector:
+    app: react-frontend
+
+
+
+
+

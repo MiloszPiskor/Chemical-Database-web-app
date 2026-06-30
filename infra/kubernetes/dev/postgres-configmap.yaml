@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-secret
+  labels:
+    app: postgres
+data:
+  POSTGRESQL_USER: postgresdb
+  POSTGRESQL_PASSWORD: password123
+  POSTGRESQL_DATABASE: chemicaldb
+
